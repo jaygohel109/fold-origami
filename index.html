@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fold — origami workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --panel:#f7f8f6; --panel-2:#eceeeb; --ink:#1b2420; --muted:#5b6862; --line:#d3d9d5;
+  --accent:#2b3fa6; --accent-ink:#ffffff; --mat:#23473e; --warn:#a3301f;
+  --shadow:0 1px 2px rgba(10,30,20,.18),0 8px 24px rgba(10,30,20,.18);
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --panel:#1a201e; --panel-2:#232b28; --ink:#e7ece9; --muted:#9caaa3; --line:#33403b;
+  --accent:#93a5ff; --accent-ink:#0f1640; --mat:#16302a; --warn:#ff8a78;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.4);
+}}
+:root[data-theme="dark"]{
+  --panel:#1a201e; --panel-2:#232b28; --ink:#e7ece9; --muted:#9caaa3; --line:#33403b;
+  --accent:#93a5ff; --accent-ink:#0f1640; --mat:#16302a; --warn:#ff8a78;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.4);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--mat);color:var(--ink);font-family:"Zen Kaku Gothic New",system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;font-size:15px;line-height:1.45}
+#stage{position:fixed;inset:0;touch-action:none}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:8px;align-items:center;pointer-events:none;z-index:3}
+.bar > *{pointer-events:auto}
+.brand{background:var(--panel);border-radius:10px;padding:7px 14px;box-shadow:var(--shadow);display:flex;align-items:baseline;gap:10px}
+.brand b{font-size:17px;letter-spacing:.01em}
+.brand span{color:var(--muted);font-size:13px}
+.spacer{flex:1}
+.group{display:flex;background:var(--panel);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+.group button{background:none;border:0;padding:8px 12px;display:flex;gap:6px;align-items:center;font-size:14px;white-space:nowrap}
+.group button + button{border-left:1px solid var(--line)}
+.group button:hover{background:var(--panel-2)}
+.group button:disabled{opacity:.4;cursor:default;background:none}
+.group button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.group svg{width:18px;height:18px;flex:none}
+
+.tools{position:fixed;left:12px;top:calc(70px + env(safe-area-inset-top,0px));width:256px;background:var(--panel);border-radius:12px;box-shadow:var(--shadow);padding:8px;z-index:3;max-height:calc(100% - 140px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto}
+.toolrow{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.tool{display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;text-align:center;background:none;border:0;border-radius:8px;padding:8px 4px 7px}
+.tool-desc{font-size:13px;color:var(--muted);padding:8px 8px 0;line-height:1.35;min-height:2.7em}
+.tool:hover{background:var(--panel-2)}
+.tool[aria-checked="true"]{background:var(--accent);color:var(--accent-ink)}
+.tool[aria-checked="true"] small{color:inherit;opacity:.85}
+.tool svg{width:30px;height:30px}
+.tool strong{font-weight:500;font-size:13.5px;line-height:1.2}
+.tool small{display:none}
+.sep{height:1px;background:var(--line);margin:8px 4px}
+.field{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;font-size:13.5px}
+.field label{color:var(--muted)}
+.seg{display:flex;background:var(--panel-2);border-radius:8px;padding:2px}
+.seg button{border:0;background:none;padding:4px 9px;border-radius:6px;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+select{background:var(--panel-2);border:0;border-radius:6px;padding:4px 6px;font-size:13px}
+input[type=range]{width:110px;accent-color:var(--accent)}
+input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-radius:6px;padding:0;background:none}
+.colors{display:flex;gap:6px;align-items:center}
+
+.hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--panel);color:var(--ink);border-radius:999px;padding:9px 18px;box-shadow:var(--shadow);font-size:14px;z-index:3;max-width:calc(100% - 24px);text-align:center;display:flex;gap:10px;align-items:center}
+.hint .cancel{border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:3px 12px;font-size:13px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(66px + env(safe-area-inset-bottom,0px));background:var(--warn);color:#fff;border-radius:10px;padding:9px 14px;font-size:14px;z-index:4;max-width:min(460px,calc(100% - 24px));opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.info{background:var(--accent);color:var(--accent-ink)}
+.bends-head{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:13.5px;font-weight:500}
+.bends-head button{border:0;background:none;color:var(--accent);font-size:13px;padding:2px 4px}
+.bend{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:6px;align-items:center;padding:4px 8px;font-size:13px}
+.bend label{color:var(--muted)}
+.bend input[type=range]{width:100%;min-width:60px}
+.bend output{font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+.bend button{border:0;background:var(--panel-2);border-radius:6px;padding:3px;display:flex}
+.menu{position:absolute;top:calc(100% + 6px);right:0;background:var(--panel);border-radius:10px;box-shadow:var(--shadow);padding:6px;min-width:220px;display:none}
+.menu.open{display:block}
+.menu button{display:block;width:100%;text-align:left;background:none;border:0;padding:8px 10px;border-radius:6px;font-size:14px}
+.menu button:hover{background:var(--panel-2)}
+.menu small{display:block;color:var(--muted);font-size:12px}
+.rel{position:relative;overflow:visible}
+.rel > button{border-radius:10px}
+.lbl{display:inline}
+.tut{position:fixed;right:12px;top:calc(70px + env(safe-area-inset-top,0px));width:320px;background:var(--panel);border-radius:12px;box-shadow:var(--shadow);padding:14px 16px 12px;z-index:3;border:2px solid transparent;transition:border-color .3s}
+.tut[hidden]{display:none}
+.tut.tut-pass{border-color:#3aa36b}
+.tut p{margin:0}
+.tut-title{font-weight:700;font-size:15.5px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.tut-title span{font-weight:400;font-size:13px;color:var(--muted)}
+.tut-bar{height:4px;background:var(--panel-2);border-radius:4px;margin:8px 0 10px;overflow:hidden}
+.tut-bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.tut-text{font-size:14.5px;line-height:1.5;margin-top:6px !important}
+.tut-note{font-size:13px;color:var(--warn);margin-top:8px !important}
+.tut-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.tut-actions button{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 12px;font-size:13.5px}
+.tut-actions button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+@media (max-width: 760px){
+  .tut{left:8px;right:8px;width:auto;top:calc(60px + env(safe-area-inset-top,0px));padding:10px 12px}
+  .tut-text{font-size:13.5px}
+  .brand span{display:none}
+  .lbl{display:none}
+  .group button{padding:8px 10px}
+  .tools{top:auto;left:8px;right:8px;width:auto;bottom:calc(70px + env(safe-area-inset-bottom,0px));max-height:none;display:flex;flex-wrap:wrap;gap:4px;padding:6px}
+  .tools .toolrow{display:flex;gap:2px;overflow-x:auto;width:100%}
+  .tool-desc{display:none}
+  .tool{width:auto;min-width:64px;padding:5px 6px;gap:0;flex:none}
+  .tool svg{width:26px;height:26px}
+  .tool small{display:none}
+  .tool strong{font-size:12px}
+  .sep{display:none}
+  .settings{display:none;width:100%}
+  .tools.showsettings .settings{display:block}
+  .moreset{display:inline-flex !important}
+  .hint{font-size:12.5px;padding:7px 12px;width:max-content;bottom:calc(12px + env(safe-area-inset-bottom,0px));border-radius:12px}
+  .toast{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
+}
+.moreset{display:none}
+@media (prefers-reduced-motion: reduce){ .toast{transition:none} }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div class="bar">
+  <div class="brand"><b>Fold</b><span>an origami workbench</span></div>
+  <div class="spacer"></div>
+  <div class="group rel">
+    <button id="learn" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6a2 2 0 012 2v12a2 2 0 00-2-2H4z"/><path d="M20 5h-6a2 2 0 00-2 2v12a2 2 0 012-2h6z"/></svg><span class="lbl">Tutorials</span></button>
+    <div class="menu" id="learnmenu" role="menu">
+      <button data-tut="basics" role="menuitem">The basics<small>Crease, fold, undo, turn over, look around</small></button>
+      <button data-tut="squash" role="menuitem">Squash folds<small>Fold a preliminary base step by step</small></button>
+      <button data-tut="petal" role="menuitem">Petal folds<small>Turn a preliminary base into a bird base</small></button>
+      <button data-tut="flower" role="menuitem">Bend into 3D<small>Open the petals of a paper flower</small></button>
+      <div class="sep"></div>
+      <button data-tut="crane" role="menuitem">Fold a crane<small>The classic: bird base, neck, tail, head, and 3D wings</small></button>
+      <button data-tut="elephant" role="menuitem">Fold an elephant<small>A full model in 11 steps, with a pull-out, a crimp, and a 3D trunk</small></button>
+    </div>
+  </div>
+  <div class="group">
+    <button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg><span class="lbl">Undo</span></button>
+    <button id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg><span class="lbl">Redo</span></button>
+  </div>
+  <div class="group">
+    <button id="turn" title="Turn the model over (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/></svg><span class="lbl">Turn over</span></button>
+    <button id="rot" title="Rotate 45° (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/></svg><span class="lbl">Rotate</span></button>
+    <button id="view" aria-pressed="false" title="Look around the model (Space)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="4"/><path d="M12 3c2.5 2.3 2.5 15.7 0 18"/></svg><span class="lbl">Look around</span></button>
+  </div>
+  <div class="group rel">
+    <button id="more" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg><span class="lbl">Sheet</span></button>
+    <div class="menu" id="menu" role="menu">
+      <button data-act="new" role="menuitem">New sheet<small>Start again with a flat square</small></button>
+      <button data-act="center" role="menuitem">Center the model</button>
+      <button data-act="resetview" role="menuitem">Reset the camera</button>
+      <button data-act="stand" role="menuitem">Stand it up<small>See a side-view model upright, like a real figure</small></button>
+      <div class="sep"></div>
+      <button data-act="demo-prelim" role="menuitem">Show me: preliminary base<small>Two diagonals and two squash folds</small></button>
+      <button data-act="demo-waterbomb" role="menuitem">Show me: waterbomb base<small>Halves and two squash folds</small></button>
+      <button data-act="demo-reverse" role="menuitem">Show me: reverse folds<small>A kite flap with an inside and outside reverse</small></button>
+      <button data-act="demo-bird" role="menuitem">Show me: bird base<small>Two petal folds on a preliminary base</small></button>
+      <button data-act="demo-flower" role="menuitem">Show me: 3D flower<small>Blintz folds, then petals bent open</small></button>
+      <button data-act="demo-crane" role="menuitem">Show me: crane<small>The classic crane from start to finish</small></button>
+      <button data-act="demo-elephant" role="menuitem">Show me: elephant<small>A full model from start to finish</small></button>
+    </div>
+  </div>
+</div>
+
+<div class="tools" id="tools">
+  <div class="toolrow" role="radiogroup" aria-label="Fold type">
+    <button class="tool" role="radio" data-tool="valley" aria-checked="true">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="26" height="26" rx="1"/><path d="M4 17h26" stroke-dasharray="3 2.5"/><path d="M22 25c3-3 3-9 0-12" stroke-linecap="round"/><path d="M19.5 13.5l2.6-.6.4 2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <strong>Valley</strong><small>Fold toward you</small></button>
+    <button class="tool" role="radio" data-tool="mountain" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="26" height="26" rx="1"/><path d="M4 17h26" stroke-dasharray="5 2 1 2 1 2"/><path d="M22 25c3-3 3-9 0-12" stroke-linecap="round" stroke-dasharray="2 2"/><path d="M19.5 13.5l2.6-.6.4 2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <strong>Mountain</strong><small>Fold behind</small></button>
+    <button class="tool" role="radio" data-tool="inside" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 29L17 5l12 24z"/><path d="M11 17h12" stroke-dasharray="3 2"/><path d="M14 11l3 6 3-6" stroke-linecap="round"/></svg>
+      <strong>Inside reverse</strong><small>Push a tip in between its layers</small></button>
+    <button class="tool" role="radio" data-tool="outside" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 29l6-12h12l6 12z"/><path d="M11 17l6-12 6 12" stroke-dasharray="3 2"/><path d="M11 17l6 7 6-7" stroke-linecap="round"/></svg>
+      <strong>Outside reverse</strong><small>Wrap a tip around its outside</small></button>
+    <button class="tool" role="radio" data-tool="sink" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M17 4L4 17l13 13 13-13z"/><path d="M10.5 10.5h13" stroke-dasharray="3 2"/><path d="M17 4v10" stroke-linecap="round"/><path d="M14 11.5l3 3 3-3" stroke-linecap="round"/></svg>
+      <strong>Sink</strong><small>Push a closed point inside</small></button>
+    <button class="tool" role="radio" data-tool="squash" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M17 5v24"/><path d="M17 5L5 17l12 12" /><path d="M17 5l12 12-12 12" stroke-dasharray="3 2"/><path d="M8 9c2-3 5-4 7-4" stroke-linecap="round"/></svg>
+      <strong>Squash</strong><small>Open a flap and flatten it</small></button>
+    <button class="tool" role="radio" data-tool="petal" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M17 3L9 17l8 14 8-14z"/><path d="M9 17h16" stroke-dasharray="3 2"/><path d="M17 31V18" stroke-dasharray="2 2"/><path d="M14 25c1-3 2-5 3-6 1 1 2 3 3 6" stroke-linecap="round"/></svg>
+      <strong>Petal</strong><small>Lift a corner as both sides fold in</small></button>
+    <button class="tool" role="radio" data-tool="bend" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M4 26h14"/><path d="M18 26L27 9"/><path d="M18 26a6 6 0 004-5.5"/><path d="M4 26l3-3"/></svg>
+      <strong>Bend</strong><small>Fold to any angle for 3D shapes</small></button>
+    <button class="tool" role="radio" data-tool="pull" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M14 5v24"/><path d="M14 8l12 9-12 9" stroke-dasharray="3 2"/><path d="M14 10L5 17l9 7"/><path d="M27 17h-6m0 0l2.5-2.5M21 17l2.5 2.5"/></svg>
+      <strong>Pull out</strong><small>Swing a hidden inner flap out</small></button>
+    <button class="tool moreset" id="moreset" aria-expanded="false" style="display:none">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 11h22M6 23h22"/><circle cx="12" cy="11" r="3" fill="var(--panel)"/><circle cx="22" cy="23" r="3" fill="var(--panel)"/></svg>
+      <strong>Options</strong></button>
+  </div>
+  <p class="tool-desc" id="tooldesc">Fold toward you</p>
+  <div class="sep"></div>
+  <div class="settings">
+    <div class="field"><label>Crease by</label>
+      <div class="seg" role="group" aria-label="How to place the crease">
+        <button data-method="line" aria-pressed="true" title="Drag a crease line">Line</button>
+        <button data-method="p2p" aria-pressed="false" title="Bring one point onto another">Point → point</button>
+      </div></div>
+    <div class="field"><label for="layers">Layers</label>
+      <select id="layers">
+        <option value="0">All layers</option>
+        <option value="1">Top 1</option>
+        <option value="2">Top 2</option>
+        <option value="3">Top 3</option>
+        <option value="4">Top 4</option>
+        <option value="6">Top 6</option>
+        <option value="-1">Bottom 1</option>
+        <option value="-2">Bottom 2</option>
+      </select></div>
+    <div class="field"><label for="thick">Paper thickness</label><input type="range" id="thick" min="1" max="30" value="7"></div>
+    <div class="field"><label>Paper colors</label>
+      <div class="colors"><input type="color" id="cf" value="#c9483b" aria-label="Front color"><input type="color" id="cb" value="#fbfaf5" aria-label="Back color"></div></div>
+    <div id="bends"></div>
+  </div>
+</div>
+
+<section class="tut" id="tut" hidden aria-live="polite"></section>
+<div class="hint" id="hint" aria-live="polite"></div>
+<div class="toast" id="toast" role="alert"></div>
+<script src="lib/three.min.js"></script>
+<script src="lib/OrbitControls.js"></script>
+<script src="src/engine.js"></script>
+<script src="src/app.js"></script>
+</body></html>

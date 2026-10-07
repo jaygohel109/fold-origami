@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fold — origami workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --panel:#f7f8f6; --panel-2:#eceeeb; --ink:#1b2420; --muted:#5b6862; --line:#d3d9d5;
+  --accent:#2b3fa6; --accent-ink:#ffffff; --mat:#23473e; --warn:#a3301f;
+  --shadow:0 1px 2px rgba(10,30,20,.18),0 8px 24px rgba(10,30,20,.18);
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --panel:#1a201e; --panel-2:#232b28; --ink:#e7ece9; --muted:#9caaa3; --line:#33403b;
+  --accent:#93a5ff; --accent-ink:#0f1640; --mat:#16302a; --warn:#ff8a78;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.4);
+}}
+:root[data-theme="dark"]{
+  --panel:#1a201e; --panel-2:#232b28; --ink:#e7ece9; --muted:#9caaa3; --line:#33403b;
+  --accent:#93a5ff; --accent-ink:#0f1640; --mat:#16302a; --warn:#ff8a78;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.4);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--mat);color:var(--ink);font-family:"Zen Kaku Gothic New",system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;font-size:15px;line-height:1.45}
+#stage{position:fixed;inset:0;touch-action:none}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:8px;align-items:center;pointer-events:none;z-index:3}
+.bar > *{pointer-events:auto}
+.brand{background:var(--panel);border-radius:10px;padding:7px 14px;box-shadow:var(--shadow);display:flex;align-items:baseline;gap:10px}
+.brand b{font-size:17px;letter-spacing:.01em}
+.brand span{color:var(--muted);font-size:13px}
+.spacer{flex:1}
+.group{display:flex;background:var(--panel);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+.group button{background:none;border:0;padding:8px 12px;display:flex;gap:6px;align-items:center;font-size:14px;white-space:nowrap}
+.group button + button{border-left:1px solid var(--line)}
+.group button:hover{background:var(--panel-2)}
+.group button:disabled{opacity:.4;cursor:default;background:none}
+.group button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.group svg{width:18px;height:18px;flex:none}
+
+.tools{position:fixed;left:12px;top:calc(70px + env(safe-area-inset-top,0px));width:256px;background:var(--panel);border-radius:12px;box-shadow:var(--shadow);padding:8px;z-index:3;max-height:calc(100% - 140px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto}
+.toolrow{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.tool{display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;text-align:center;background:none;border:0;border-radius:8px;padding:8px 4px 7px}
+.tool-desc{font-size:13px;color:var(--muted);padding:8px 8px 0;line-height:1.35;min-height:2.7em}
+.tool:hover{background:var(--panel-2)}
+.tool[aria-checked="true"]{background:var(--accent);color:var(--accent-ink)}
+.tool[aria-checked="true"] small{color:inherit;opacity:.85}
+.tool svg{width:30px;height:30px}
+.tool strong{font-weight:500;font-size:13.5px;line-height:1.2}
+.tool small{display:none}
+.sep{height:1px;background:var(--line);margin:8px 4px}
+.field{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;font-size:13.5px}
+.field label{color:var(--muted)}
+.seg{display:flex;background:var(--panel-2);border-radius:8px;padding:2px}
+.seg button{border:0;background:none;padding:4px 9px;border-radius:6px;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+select{background:var(--panel-2);border:0;border-radius:6px;padding:4px 6px;font-size:13px}
+input[type=range]{width:110px;accent-color:var(--accent)}
+input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-radius:6px;padding:0;background:none}
+.colors{display:flex;gap:6px;align-items:center}
+
+.hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--panel);color:var(--ink);border-radius:999px;padding:9px 18px;box-shadow:var(--shadow);font-size:14px;z-index:3;max-width:calc(100% - 24px);text-align:center;display:flex;gap:10px;align-items:center}
+.hint .cancel{border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:3px 12px;font-size:13px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(66px + env(safe-area-inset-bottom,0px));background:var(--warn);color:#fff;border-radius:10px;padding:9px 14px;font-size:14px;z-index:4;max-width:min(460px,calc(100% - 24px));opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.info{background:var(--accent);color:var(--accent-ink)}
+.bends-head{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:13.5px;font-weight:500}
+.bends-head button{border:0;background:none;color:var(--accent);font-size:13px;padding:2px 4px}
+.bend{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:6px;align-items:center;padding:4px 8px;font-size:13px}
+.bend label{color:var(--muted)}
+.bend input[type=range]{width:100%;min-width:60px}
+.bend output{font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+.bend button{border:0;background:var(--panel-2);border-radius:6px;padding:3px;display:flex}
+.menu{position:absolute;top:calc(100% + 6px);right:0;background:var(--panel);border-radius:10px;box-shadow:var(--shadow);padding:6px;min-width:220px;display:none}
+.menu.open{display:block}
+.menu button{display:block;width:100%;text-align:left;background:none;border:0;padding:8px 10px;border-radius:6px;font-size:14px}
+.menu button:hover{background:var(--panel-2)}
+.menu small{display:block;color:var(--muted);font-size:12px}
+.rel{position:relative;overflow:visible}
+.rel > button{border-radius:10px}
+.lbl{display:inline}
+.tut{position:fixed;right:12px;top:calc(70px + env(safe-area-inset-top,0px));width:320px;background:var(--panel);border-radius:12px;box-shadow:var(--shadow);padding:14px 16px 12px;z-index:3;border:2px solid transparent;transition:border-color .3s}
+.tut[hidden]{display:none}
+.tut.tut-pass{border-color:#3aa36b}
+.tut p{margin:0}
+.tut-title{font-weight:700;font-size:15.5px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.tut-title span{font-weight:400;font-size:13px;color:var(--muted)}
+.tut-bar{height:4px;background:var(--panel-2);border-radius:4px;margin:8px 0 10px;overflow:hidden}
+.tut-bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.tut-text{font-size:14.5px;line-height:1.5;margin-top:6px !important}
+.tut-note{font-size:13px;color:var(--warn);margin-top:8px !important}
+.tut-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.tut-actions button{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 12px;font-size:13.5px}
+.tut-actions button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+@media (max-width: 760px){
+  .tut{left:8px;right:8px;width:auto;top:calc(60px + env(safe-area-inset-top,0px));padding:10px 12px}
+  .tut-text{font-size:13.5px}
+  .brand span{display:none}
+  .lbl{display:none}
+  .group button{padding:8px 10px}
+  .tools{top:auto;left:8px;right:8px;width:auto;bottom:calc(70px + env(safe-area-inset-bottom,0px));max-height:none;display:flex;flex-wrap:wrap;gap:4px;padding:6px}
+  .tools .toolrow{display:flex;gap:2px;overflow-x:auto;width:100%}
+  .tool-desc{display:none}
+  .tool{width:auto;min-width:64px;padding:5px 6px;gap:0;flex:none}
+  .tool svg{width:26px;height:26px}
+  .tool small{display:none}
+  .tool strong{font-size:12px}
+  .sep{display:none}
+  .settings{display:none;width:100%}
+  .tools.showsettings .settings{display:block}
+  .moreset{display:inline-flex !important}
+  .hint{font-size:12.5px;padding:7px 12px;width:max-content;bottom:calc(12px + env(safe-area-inset-bottom,0px));border-radius:12px}
+  .toast{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
+}
+.moreset{display:none}
+@media (prefers-reduced-motion: reduce){ .toast{transition:none} }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div class="bar">
+  <div class="brand"><b>Fold</b><span>an origami workbench</span></div>
+  <div class="spacer"></div>
+  <div class="group rel">
+    <button id="learn" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6a2 2 0 012 2v12a2 2 0 00-2-2H4z"/><path d="M20 5h-6a2 2 0 00-2 2v12a2 2 0 012-2h6z"/></svg><span class="lbl">Tutorials</span></button>
+    <div class="menu" id="learnmenu" role="menu">
+      <button data-tut="basics" role="menuitem">The basics<small>Crease, fold, undo, turn over, look around</small></button>
+      <button data-tut="squash" role="menuitem">Squash folds<small>Fold a preliminary base step by step</small></button>
+      <button data-tut="petal" role="menuitem">Petal folds<small>Turn a preliminary base into a bird base</small></button>
+      <button data-tut="flower" role="menuitem">Bend into 3D<small>Open the petals of a paper flower</small></button>
+      <div class="sep"></div>
+      <button data-tut="crane" role="menuitem">Fold a crane<small>The classic: bird base, neck, tail, head, and 3D wings</small></button>
+      <button data-tut="elephant" role="menuitem">Fold an elephant<small>A full model in 11 steps, with a pull-out, a crimp, and a 3D trunk</small></button>
+    </div>
+  </div>
+  <div class="group">
+    <button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg><span class="lbl">Undo</span></button>
+    <button id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg><span class="lbl">Redo</span></button>
+  </div>
+  <div class="group">
+    <button id="turn" title="Turn the model over (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/></svg><span class="lbl">Turn over</span></button>
+    <button id="rot" title="Rotate 45° (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/></svg><span class="lbl">Rotate</span></button>
+    <button id="view" aria-pressed="false" title="Look around the model (Space)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="4"/><path d="M12 3c2.5 2.3 2.5 15.7 0 18"/></svg><span class="lbl">Look around</span></button>
+  </div>
+  <div class="group rel">
+    <button id="more" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg><span class="lbl">Sheet</span></button>
+    <div class="menu" id="menu" role="menu">
+      <button data-act="new" role="menuitem">New sheet<small>Start again with a flat square</small></button>
+      <button data-act="center" role="menuitem">Center the model</button>
+      <button data-act="resetview" role="menuitem">Reset the camera</button>
+      <button data-act="stand" role="menuitem">Stand it up<small>See a side-view model upright, like a real figure</small></button>
+      <div class="sep"></div>
+      <button data-act="demo-prelim" role="menuitem">Show me: preliminary base<small>Two diagonals and two squash folds</small></button>
+      <button data-act="demo-waterbomb" role="menuitem">Show me: waterbomb base<small>Halves and two squash folds</small></button>
+      <button data-act="demo-reverse" role="menuitem">Show me: reverse folds<small>A kite flap with an inside and outside reverse</small></button>
+      <button data-act="demo-bird" role="menuitem">Show me: bird base<small>Two petal folds on a preliminary base</small></button>
+      <button data-act="demo-flower" role="menuitem">Show me: 3D flower<small>Blintz folds, then petals bent open</small></button>
+      <button data-act="demo-crane" role="menuitem">Show me: crane<small>The classic crane from start to finish</small></button>
+      <button data-act="demo-elephant" role="menuitem">Show me: elephant<small>A full model from start to finish</small></button>
+    </div>
+  </div>
+</div>
+
+<div class="tools" id="tools">
+  <div class="toolrow" role="radiogroup" aria-label="Fold type">
+    <button class="tool" role="radio" data-tool="valley" aria-checked="true">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="26" height="26" rx="1"/><path d="M4 17h26" stroke-dasharray="3 2.5"/><path d="M22 25c3-3 3-9 0-12" stroke-linecap="round"/><path d="M19.5 13.5l2.6-.6.4 2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <strong>Valley</strong><small>Fold toward you</small></button>
+    <button class="tool" role="radio" data-tool="mountain" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="26" height="26" rx="1"/><path d="M4 17h26" stroke-dasharray="5 2 1 2 1 2"/><path d="M22 25c3-3 3-9 0-12" stroke-linecap="round" stroke-dasharray="2 2"/><path d="M19.5 13.5l2.6-.6.4 2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <strong>Mountain</strong><small>Fold behind</small></button>
+    <button class="tool" role="radio" data-tool="inside" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 29L17 5l12 24z"/><path d="M11 17h12" stroke-dasharray="3 2"/><path d="M14 11l3 6 3-6" stroke-linecap="round"/></svg>
+      <strong>Inside reverse</strong><small>Push a tip in between its layers</small></button>
+    <button class="tool" role="radio" data-tool="outside" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 29l6-12h12l6 12z"/><path d="M11 17l6-12 6 12" stroke-dasharray="3 2"/><path d="M11 17l6 7 6-7" stroke-linecap="round"/></svg>
+      <strong>Outside reverse</strong><small>Wrap a tip around its outside</small></button>
+    <button class="tool" role="radio" data-tool="sink" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M17 4L4 17l13 13 13-13z"/><path d="M10.5 10.5h13" stroke-dasharray="3 2"/><path d="M17 4v10" stroke-linecap="round"/><path d="M14 11.5l3 3 3-3" stroke-linecap="round"/></svg>
+      <strong>Sink</strong><small>Push a closed point inside</small></button>
+    <button class="tool" role="radio" data-tool="squash" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M17 5v24"/><path d="M17 5L5 17l12 12" /><path d="M17 5l12 12-12 12" stroke-dasharray="3 2"/><path d="M8 9c2-3 5-4 7-4" stroke-linecap="round"/></svg>
+      <strong>Squash</strong><small>Open a flap and flatten it</small></button>
+    <button class="tool" role="radio" data-tool="petal" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M17 3L9 17l8 14 8-14z"/><path d="M9 17h16" stroke-dasharray="3 2"/><path d="M17 31V18" stroke-dasharray="2 2"/><path d="M14 25c1-3 2-5 3-6 1 1 2 3 3 6" stroke-linecap="round"/></svg>
+      <strong>Petal</strong><small>Lift a corner as both sides fold in</small></button>
+    <button class="tool" role="radio" data-tool="bend" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M4 26h14"/><path d="M18 26L27 9"/><path d="M18 26a6 6 0 004-5.5"/><path d="M4 26l3-3"/></svg>
+      <strong>Bend</strong><small>Fold to any angle for 3D shapes</small></button>
+    <button class="tool" role="radio" data-tool="pull" aria-checked="false">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M14 5v24"/><path d="M14 8l12 9-12 9" stroke-dasharray="3 2"/><path d="M14 10L5 17l9 7"/><path d="M27 17h-6m0 0l2.5-2.5M21 17l2.5 2.5"/></svg>
+      <strong>Pull out</strong><small>Swing a hidden inner flap out</small></button>
+    <button class="tool moreset" id="moreset" aria-expanded="false" style="display:none">
+      <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 11h22M6 23h22"/><circle cx="12" cy="11" r="3" fill="var(--panel)"/><circle cx="22" cy="23" r="3" fill="var(--panel)"/></svg>
+      <strong>Options</strong></button>
+  </div>
+  <p class="tool-desc" id="tooldesc">Fold toward you</p>
+  <div class="sep"></div>
+  <div class="settings">
+    <div class="field"><label>Crease by</label>
+      <div class="seg" role="group" aria-label="How to place the crease">
+        <button data-method="line" aria-pressed="true" title="Drag a crease line">Line</button>
+        <button data-method="p2p" aria-pressed="false" title="Bring one point onto another">Point → point</button>
+      </div></div>
+    <div class="field"><label for="layers">Layers</label>
+      <select id="layers">
+        <option value="0">All layers</option>
+        <option value="1">Top 1</option>
+        <option value="2">Top 2</option>
+        <option value="3">Top 3</option>
+        <option value="4">Top 4</option>
+        <option value="6">Top 6</option>
+        <option value="-1">Bottom 1</option>
+        <option value="-2">Bottom 2</option>
+      </select></div>
+    <div class="field"><label for="thick">Paper thickness</label><input type="range" id="thick" min="1" max="30" value="7"></div>
+    <div class="field"><label>Paper colors</label>
+      <div class="colors"><input type="color" id="cf" value="#c9483b" aria-label="Front color"><input type="color" id="cb" value="#fbfaf5" aria-label="Back color"></div></div>
+    <div id="bends"></div>
+  </div>
+</div>
+
+<section class="tut" id="tut" hidden aria-live="polite"></section>
+<div class="hint" id="hint" aria-live="polite"></div>
+<div class="toast" id="toast" role="alert"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ===== Origami flat-fold engine =====
+const Engine = (() => {
+  const TOL = 1e-6;
+  let nextId = 1;
+  const ap = (T, p) => [T[0]*p[0] + T[1]*p[1] + T[4], T[2]*p[0] + T[3]*p[1] + T[5]];
+  const comp = (A, B) => [
+    A[0]*B[0] + A[1]*B[2], A[0]*B[1] + A[1]*B[3],
+    A[2]*B[0] + A[3]*B[2], A[2]*B[1] + A[3]*B[3],
+    A[0]*B[4] + A[1]*B[5] + A[4], A[2]*B[4] + A[3]*B[5] + A[5]];
+  const refl = (L) => {
+    const [dx, dy] = L.d, [px, py] = L.p;
+    const a = 2*dx*dx - 1, b = 2*dx*dy, d = 2*dy*dy - 1;
+    return [a, b, b, d, px - (a*px + b*py), py - (b*px + d*py)];
+  };
+  const side = (L, q) => L.d[0]*(q[1] - L.p[1]) - L.d[1]*(q[0] - L.p[0]);
+  const reflPt = (L, q) => ap(refl(L), q);
+  const fold = (f) => f.poly.map(v => ap(f.T, v));
+  const centroid = (pts) => {
+    let x = 0, y = 0; for (const p of pts) { x += p[0]; y += p[1]; }
+    return [x / pts.length, y / pts.length];
+  };
+  const area = (pts) => {
+    let s = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i+1) % pts.length]; s += a[0]*b[1] - a[1]*b[0]; }
+    return s / 2;
+  };
+  const dirOf = (ang) => [Math.cos(ang), Math.sin(ang)];
+  const clone = (fs) => fs.map(f => ({ id: f.id, poly: f.poly.map(p => p.slice()), T: f.T.slice(), layer: f.layer }));
+
+  function newPaper() {
+    nextId = 1;
+    return [{ id: nextId++, poly: [[-1,-1],[1,-1],[1,1],[-1,1]], T: [1,0,0,1,0,0], layer: 0 }];
+  }
+
+  // Split a facet by a line given in folded coordinates.
+  function splitFacet(f, L) {
+    const P = fold(f);
+    const s = P.map(q => { const v = side(L, q); return Math.abs(v) < 1e-9 ? 0 : v; });
+    if (s.every(v => v >= -TOL) || s.every(v => v <= TOL)) return [f];
+    const A = [], B = [], n = f.poly.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n, vi = f.poly[i], vj = f.poly[j];
+      if (s[i] >= 0) A.push(vi); if (s[i] <= 0) B.push(vi);
+      if ((s[i] > 0 && s[j] < 0) || (s[i] < 0 && s[j] > 0)) {
+        const t = s[i] / (s[i] - s[j]);
+        const m = [vi[0] + (vj[0] - vi[0])*t, vi[1] + (vj[1] - vi[1])*t];
+        A.push(m); B.push(m);
+      }
+    }
+    if (A.length < 3 || B.length < 3 || Math.abs(area(A)) < 1e-9 || Math.abs(area(B)) < 1e-9) return [f];
+    return [
+      { id: nextId++, poly: A, T: f.T.slice(), layer: f.layer, origin: f.origin ?? f.id, group: f.group },
+      { id: nextId++, poly: B, T: f.T.slice(), layer: f.layer, origin: f.origin ?? f.id, group: f.group }];
+  }
+  const splitAll = (fs, L, pred) => fs.flatMap(f => (!pred || pred(f)) ? splitFacet(f, L) : [f]);
+
+  // Shared boundary segment between two facets, in paper coordinates.
+  function shared(f, g) {
+    const a = f.poly, b = g.poly;
+    for (let i = 0; i < a.length; i++) {
+      const a1 = a[i], a2 = a[(i+1) % a.length];
+      const ex = a2[0] - a1[0], ey = a2[1] - a1[1], len2 = ex*ex + ey*ey;
+      if (len2 < 1e-14) continue;
+      const len = Math.sqrt(len2);
+      for (let j = 0; j < b.length; j++) {
+        const b1 = b[j], b2 = b[(j+1) % b.length];
+        const c1 = (ex*(b1[1] - a1[1]) - ey*(b1[0] - a1[0])) / len;
+        const c2 = (ex*(b2[1] - a1[1]) - ey*(b2[0] - a1[0])) / len;
+        if (Math.abs(c1) > 1e-7 || Math.abs(c2) > 1e-7) continue;
+        const t1 = ((b1[0] - a1[0])*ex + (b1[1] - a1[1])*ey) / len2;
+        const t2 = ((b2[0] - a1[0])*ex + (b2[1] - a1[1])*ey) / len2;
+        const lo = Math.max(0, Math.min(t1, t2)), hi = Math.min(1, Math.max(t1, t2));
+        if ((hi - lo)*len > 1e-6) return [[a1[0] + ex*lo, a1[1] + ey*lo], [a1[0] + ex*hi, a1[1] + ey*hi]];
+      }
+    }
+    return null;
+  }
+  function bbox(pts) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of pts) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }
+    return [x0, y0, x1, y1];
+  }
+  function neighbors(fs) {
+    const bb = fs.map(f => bbox(f.poly));
+    const nb = fs.map(() => []);
+    for (let i = 0; i < fs.length; i++) for (let j = i + 1; j < fs.length; j++) {
+      const A = bb[i], B = bb[j];
+      if (A[0] > B[2] + 1e-6 || B[0] > A[2] + 1e-6 || A[1] > B[3] + 1e-6 || B[1] > A[3] + 1e-6) continue;
+      const s = shared(fs[i], fs[j]);
+      if (s) { nb[i].push({ j, seg: s }); nb[j].push({ j: i, seg: s }); }
+    }
+    return nb;
+  }
+  const segOnLine = (f, seg, L) => seg.every(p => Math.abs(side(L, ap(f.T, p))) < 1e-6);
+
+  // Convex polygon overlap (SAT) with a small tolerance so touching edges do not count.
+  function overlap(P, Q) {
+    for (const poly of [P, Q]) for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i+1) % poly.length];
+      const nx = a[1] - b[1], ny = b[0] - a[0], l = Math.hypot(nx, ny);
+      if (l < 1e-12) continue;
+      let p0 = Infinity, p1 = -Infinity, q0 = Infinity, q1 = -Infinity;
+      for (const v of P) { const d = (v[0]*nx + v[1]*ny) / l; p0 = Math.min(p0, d); p1 = Math.max(p1, d); }
+      for (const v of Q) { const d = (v[0]*nx + v[1]*ny) / l; q0 = Math.min(q0, d); q1 = Math.max(q1, d); }
+      if (Math.min(p1, q1) - Math.max(p0, q0) < 1e-5) return false;
+    }
+    return true;
+  }
+  // Physical stack level of each facet (0 = resting on the table) and depth from the top.
+  function levels(fs) {
+    const P = fs.map(fold), bb = P.map(bbox);
+    const ord = fs.map((_, i) => i).sort((a, b) => fs[a].layer - fs[b].layer);
+    const lv = new Array(fs.length).fill(0), top = new Array(fs.length).fill(0);
+    const hit = (i, j) => !(bb[i][0] > bb[j][2] || bb[j][0] > bb[i][2] || bb[i][1] > bb[j][3] || bb[j][1] > bb[i][3]) && overlap(P[i], P[j]);
+    for (let a = 0; a < ord.length; a++) {
+      const i = ord[a]; let m = -1;
+      for (let b = 0; b < a; b++) { const j = ord[b]; if (lv[j] > m && hit(i, j)) m = lv[j]; }
+      lv[i] = m + 1;
+    }
+    for (let a = ord.length - 1; a >= 0; a--) {
+      const i = ord[a]; let m = -1;
+      for (let b = ord.length - 1; b > a; b--) { const j = ord[b]; if (top[j] > m && hit(i, j)) m = top[j]; }
+      top[i] = m + 1;
+    }
+    return { lv, top };
+  }
+  function renorm(fs) {
+    const ord = fs.slice().sort((a, b) => a.layer - b.layer);
+    ord.forEach((f, i) => f.layer = i);
+  }
+
+  // Facets on `sgn` side of L that must move together, starting from the top `layerN` layers (0 = all).
+  function movingSet(fs, L, sgn, layerN, seedPred) {
+    const nb = neighbors(fs);
+    const on = fs.map(f => side(L, centroid(fold(f))) * sgn > 0);
+    const { top, lv } = levels(fs);
+    const M = new Set(), q = [];
+    if (seedPred && layerN !== 0) {
+      // layers counted at the tapped spot: the top (or bottom) N facets under it
+      const cand = fs.map((f, i) => i).filter(i => on[i] && seedPred(fs[i])).sort((a, b) => layerN > 0 ? fs[b].layer - fs[a].layer : fs[a].layer - fs[b].layer);
+      for (const i of cand.slice(0, Math.abs(layerN))) { M.add(i); q.push(i); }
+    } else fs.forEach((f, i) => { if (on[i] && (layerN === 0 || (layerN > 0 ? top[i] < layerN : lv[i] < -layerN)) && (!seedPred || seedPred(f))) { M.add(i); q.push(i); } });
+    while (q.length) {
+      const i = q.pop();
+      for (const { j, seg } of nb[i]) if (on[j] && !M.has(j) && !segOnLine(fs[i], seg, L)) { M.add(j); q.push(j); }
+    }
+    return { M, nb };
+  }
+
+  // Prepare animation info: each facet gets T0 (pre-op transform) and steps of rigid rotations.
+  function stamp(fs) { for (const f of fs) { f.origin = f.id; f.T0 = f.T.slice(); f.steps = []; } }
+  function addStep(f, L, dir) {
+    // centroid at this stage (after previous steps)
+    let T = f.T0; for (const s of f.steps) T = comp(refl(s.line), T);
+    const c = centroid(f.poly.map(v => ap(T, v)));
+    const sg = Math.sign(side(L, c)) || 1;
+    f.steps.push({ line: { p: L.p.slice(), d: L.d.slice() }, theta: Math.PI * dir * sg });
+    f.T = comp(refl(L), f.T);
+  }
+  function finish(fs) {
+    renorm(fs);
+    return fs.map(f => ({ id: f.id, poly: f.poly, T: f.T, layer: f.layer,
+      anim: { origin: f.origin, T0: f.T0 || f.T.slice(), steps: f.steps || [] } }));
+  }
+
+  // mode: valley | mountain | inside | outside | sink
+  function foldOp(state, L, sgn, mode, layerN, seedPred) {
+    let fs = clone(state); stamp(fs);
+    fs = splitAll(fs, L).map(f => ({ ...f, T0: f.T.slice(), steps: [] }));
+    if (mode === 'sink') layerN = 0;
+    const { M } = movingSet(fs, L, sgn, layerN, seedPred);
+    if (!M.size) return { error: 'Nothing to fold on that side. Draw the crease across the paper.' };
+    if (M.size === fs.length) return { error: 'That crease misses the paper. Draw it across the part you want to fold.' };
+    const mv = [...M].map(i => fs[i]);
+    const keys = mv.map(f => f.layer);
+    const mx = Math.max(...fs.map(f => f.layer)), mn = Math.min(...fs.map(f => f.layer));
+    const kmax = Math.max(...keys), kmin = Math.min(...keys);
+    if (mode === 'pull') {
+      for (const f of mv) addStep(f, L, 1); // stays at its depth, sandwiched between the outer layers
+    } else if (mode === 'valley' || mode === 'mountain') {
+      for (const f of mv) {
+        addStep(f, L, mode === 'valley' ? 1 : -1);
+        f.layer = mode === 'valley' ? mx + 1 + (kmax - f.layer) : mn - 1 - (f.layer - kmin);
+      }
+    } else {
+      // reverse folds / sinks: split the moving layers into an upper and lower half
+      const lv = [...new Set(keys)].sort((a, b) => b - a);
+      if (lv.length < 2) return { error: 'Reverse folds and sinks need a flap with at least two layers.' };
+      const half = Math.ceil(lv.length / 2), topSet = new Set(lv.slice(0, half));
+      const T = mv.filter(f => topSet.has(f.layer)), B = mv.filter(f => !topSet.has(f.layer));
+      const minT = Math.min(...T.map(f => f.layer)), maxB = Math.max(...B.map(f => f.layer));
+      const maxT = Math.max(...T.map(f => f.layer)), minB = Math.min(...B.map(f => f.layer));
+      const inside = mode !== 'outside';
+      const n = mv.length + 2, eps = 1 / (n * 4);
+      const g = (minT + maxB) / 2;
+      // inside: [T reversed][B reversed] placed in the gap between the halves (top→bottom)
+      // outside: T reversed above the top half, B reversed below the bottom half
+      const Tasc = T.slice().sort((a, b) => a.layer - b.layer); // bottom→top of T
+      const Basc = B.slice().sort((a, b) => a.layer - b.layer);
+      const newKey = new Map();
+      if (inside) {
+        const seq = [...Tasc, ...Basc]; // top→bottom order of reflected parts
+        seq.forEach((f, i) => newKey.set(f, g + (seq.length / 2 - i) * eps));
+      } else {
+        Tasc.forEach((f, i) => newKey.set(f, maxT + (Tasc.length - i) * eps * 2));
+        Basc.forEach((f, i) => newKey.set(f, minB - (Basc.length - i) * eps * 2));
+      }
+      for (const f of T) addStep(f, L, inside ? -1 : 1);
+      for (const f of B) addStep(f, L, inside ? 1 : -1);
+      for (const f of mv) f.layer = newKey.get(f);
+    }
+    return { facets: finish(fs) };
+  }
+
+  // Squash: H = hinge line of the flap, sgn = side the flap lies on, layerN = layers in the flap (default 2).
+  function squashOp(state, H, sgn, layerN, seedPred) {
+    let fs = clone(state); stamp(fs);
+    fs = splitAll(fs, H).map(f => ({ ...f, T0: f.T.slice(), steps: [] }));
+    const { M, nb } = movingSet(fs, H, sgn, layerN || 2, seedPred);
+    if (!M.size) return { error: 'No flap found on that side of the hinge.' };
+    const flap = [...M];
+    const lv = [...new Set(flap.map(i => fs[i].layer))].sort((a, b) => b - a);
+    if (lv.length < 2) return { error: 'A squash needs a flap with two or more layers joined at a folded edge.' };
+    const topSet = new Set(lv.slice(0, Math.ceil(lv.length / 2)));
+    const U = new Set(flap.filter(i => topSet.has(fs[i].layer)));
+    const Lo = new Set(flap.filter(i => !topSet.has(fs[i].layer)));
+    // spine: edges joining upper and lower halves of the flap, away from the hinge
+    let spine = null, best = 0; const attach = [];
+    for (const i of flap) for (const { j, seg } of nb[i]) {
+      const a = ap(fs[i].T, seg[0]), b = ap(fs[i].T, seg[1]);
+      if (!M.has(j) && segOnLine(fs[i], seg, H)) { attach.push(a, b); continue; }
+      if (U.has(i) && Lo.has(j) && !segOnLine(fs[i], seg, H)) {
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (l > best) { best = l; spine = [a, b]; }
+      }
+    }
+    if (!spine) return { error: 'Could not find the folded edge of that flap. Try the Layers setting, or pick the other side.' };
+    if (!attach.length) return { error: 'That line is not the hinge of a flap. Draw it along the crease where the flap is attached.' };
+    // P = intersection of hinge and spine lines
+    const sd = [spine[1][0] - spine[0][0], spine[1][1] - spine[0][1]];
+    const den = H.d[0]*sd[1] - H.d[1]*sd[0];
+    if (Math.abs(den) < 1e-6) return { error: 'The flap\u2019s folded edge runs parallel to the hinge, so it cannot be squashed open here.' };
+    const t = ((spine[0][0] - H.p[0])*sd[1] - (spine[0][1] - H.p[1])*sd[0]) / den;
+    const P = [H.p[0] + H.d[0]*t, H.p[1] + H.d[1]*t];
+    const far = Math.hypot(spine[0][0] - P[0], spine[0][1] - P[1]) > Math.hypot(spine[1][0] - P[0], spine[1][1] - P[1]) ? spine[0] : spine[1];
+    const am = centroid(attach);
+    const a = Math.atan2(am[1] - P[1], am[0] - P[0]);
+    const e = Math.atan2(far[1] - P[1], far[0] - P[0]);
+    const h = Math.atan2(H.d[1], H.d[0]);
+    const cLo = (a + e) / 2, cUpost = cLo + h - e, cUcur = 2*h - cUpost;
+    const LLo = { p: P, d: dirOf(cLo) }, LUcur = { p: P, d: dirOf(cUcur) }, LUpost = { p: P, d: dirOf(cUpost) };
+    const HL = { p: P, d: H.d.slice() };
+    fs.forEach((f, i) => f.group = U.has(i) ? 'U' : Lo.has(i) ? 'L' : null);
+    fs = splitAll(fs, LLo, f => f.group === 'L');
+    fs = splitAll(fs, LUcur, f => f.group === 'U').map(f => ({ ...f, T0: f.T0 || f.T.slice(), steps: f.steps || [] }));
+    const sLo = Math.sign(side(LLo, far)), sU = Math.sign(side(LUcur, far));
+    let mx = Math.max(...fs.map(f => f.layer));
+    const nearU = [], farAll = [];
+    for (const f of fs) {
+      const c = centroid(fold(f));
+      if (f.group === 'L' && side(LLo, c) * sLo > 0) { addStep(f, LLo, 1); farAll.push(f); }
+      else if (f.group === 'U') {
+        const isFar = side(LUcur, c) * sU > 0;
+        addStep(f, HL, 1);
+        if (isFar) { addStep(f, LUpost, 1); farAll.push(f); } else nearU.push(f);
+      }
+    }
+    nearU.sort((x, y) => y.layer - x.layer).forEach((f, i) => f.layer = mx + 1 + i);
+    mx += nearU.length + 1;
+    farAll.sort((x, y) => x.layer - y.layer).forEach((f, i) => f.layer = mx + 1 + i);
+    for (const f of fs) delete f.group;
+    return { facets: finish(fs) };
+  }
+
+
+
+  // Pull out: swing a hidden inner flap out across L. Picks the layer under `tap`
+  // whose flap can move without dragging the outermost layers along.
+  function pullOp(state, L, sgn, tap) {
+    let fs = clone(state);
+    fs = splitAll(fs, L);
+    const under = fs.map((f, i) => i).filter(i => side(L, centroid(fold(fs[i]))) * sgn > 0 && insideConvex(tap, fold(fs[i])))
+      .sort((a, b) => fs[b].layer - fs[a].layer);
+    if (under.length < 3) return { error: 'There\u2019s no hidden flap there. Pull out works on a layer tucked between other layers.' };
+    const outer = new Set([under[0], under[under.length - 1]]);
+    let best = null;
+    for (let k = 1; k < under.length - 1; k++) {
+      const id = fs[under[k]].id;
+      const { M } = movingSet(fs, L, sgn, 0, f => f.id === id);
+      if ([...outer].some(i => M.has(i))) continue;
+      if (!best || M.size < best.size) best = { id, size: M.size, layer: fs[under[k]].layer };
+    }
+    if (!best) return { error: 'That flap is joined to the outer layers on this side, so it can\u2019t be pulled out along this line.' };
+    return foldOp(state, L, sgn, 'pull', 0, f => f.layer === best.layer && insideConvex(tap, fold(f)));
+  }
+  function insideConvex(pt, P) {
+    let s0 = 0;
+    for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i+1) % P.length]; const c = (b[0]-a[0])*(pt[1]-a[1]) - (b[1]-a[1])*(pt[0]-a[0]); if (Math.abs(c) < 1e-9) continue; if (!s0) s0 = Math.sign(c); else if (Math.sign(c) !== s0) return false; }
+    return true;
+  }
+
+  // ---- hull helper ----
+  function hull(pts) {
+    const p = pts.map(q => [Math.round(q[0]*1e6)/1e6, Math.round(q[1]*1e6)/1e6]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cr = (o, a, b) => (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0]);
+    const lo = [], up = [];
+    for (const q of p) { while (lo.length > 1 && cr(lo[lo.length-2], lo[lo.length-1], q) <= 1e-9) lo.pop(); lo.push(q); }
+    for (const q of p.slice().reverse()) { while (up.length > 1 && cr(up[up.length-2], up[up.length-1], q) <= 1e-9) up.pop(); up.push(q); }
+    return lo.slice(0, -1).concat(up.slice(0, -1));
+  }
+  const nrm = (v) => { const l = Math.hypot(v[0], v[1]); return [v[0]/l, v[1]/l]; };
+  function segX(p, u, a, b) { // ray p+t u with segment a-b
+    const e = [b[0]-a[0], b[1]-a[1]], den = u[0]*e[1] - u[1]*e[0];
+    if (Math.abs(den) < 1e-12) return null;
+    const w = [a[0]-p[0], a[1]-p[1]];
+    const t = (w[0]*e[1] - w[1]*e[0]) / den, s = (w[0]*u[1] - w[1]*u[0]) / den;
+    if (t <= 1e-9 || s < -1e-6 || s > 1 + 1e-6) return null;
+    return [p[0] + u[0]*t, p[1] + u[1]*t];
+  }
+  // chain several ops into one animation
+  function chain(state, fns) {
+    let cur = state, byId = null, stage = 0;
+    for (const fn of fns) {
+      const r = fn(cur);
+      if (r.error) return r;
+      if (byId) for (const f of r.facets) {
+        const prev = byId.get(f.anim.origin);
+        f.anim = { origin: prev.anim.origin, T0: prev.anim.T0,
+          steps: prev.anim.steps.concat(f.anim.steps.map(s => ({ ...s, stage }))) };
+      } else for (const f of r.facets) f.anim.steps = f.anim.steps.map(s => ({ ...s, stage }));
+      byId = new Map(r.facets.map(f => [f.id, f]));
+      cur = r.facets; stage++;
+    }
+    for (const f of cur) f.anim.stages = stage;
+    return { facets: cur };
+  }
+
+  // Petal fold: tap the open corner of the top flap. Kite creases bisect the corner,
+  // both side edges collapse inward (inside reverse folds), and the corner swings up.
+  function petalOp(state, tap) {
+    const { top } = levels(state);
+    const topF = state.filter((f, i) => top[i] === 0);
+    const h = hull(topF.flatMap(fold));
+    if (h.length < 4) return { error: 'A petal fold needs a diamond-shaped flap on top, like a preliminary base.' };
+    let ci = 0, bd = Infinity;
+    h.forEach((q, i) => { const d = Math.hypot(q[0]-tap[0], q[1]-tap[1]); if (d < bd) { bd = d; ci = i; } });
+    const C = h[ci], B = h[(ci + h.length - 1) % h.length], D = h[(ci + 1) % h.length];
+    let A = null, far = -1;
+    for (const q of h) { const d = Math.hypot(q[0]-C[0], q[1]-C[1]); if (d > far) { far = d; A = q; } }
+    if (A === B || A === D) return { error: 'Tap the corner you want to lift. It works on a diamond flap with a corner pointing away from the closed point.' };
+    const ua = nrm([A[0]-C[0], A[1]-C[1]]);
+    const kB = segX(C, nrm([nrm([B[0]-C[0], B[1]-C[1]])[0] + ua[0], nrm([B[0]-C[0], B[1]-C[1]])[1] + ua[1]]), A, B);
+    const kD = segX(C, nrm([nrm([D[0]-C[0], D[1]-C[1]])[0] + ua[0], nrm([D[0]-C[0], D[1]-C[1]])[1] + ua[1]]), A, D);
+    if (!kB || !kD) return { error: 'This flap isn\u2019t shaped for a petal fold. Try it on a preliminary base.' };
+    const L1 = { p: C, d: nrm([kB[0]-C[0], kB[1]-C[1]]) }, L2 = { p: C, d: nrm([kD[0]-C[0], kD[1]-C[1]]) };
+    const H = { p: kB, d: nrm([kD[0]-kB[0], kD[1]-kB[1]]) };
+    const Bp = ap(refl(L1), B), Dp = ap(refl(L2), D);
+    if (Math.abs(side(H, Bp)) > 2e-3 || Math.abs(side(H, Dp)) > 2e-3)
+      return { error: 'The two sides of this flap aren\u2019t even, so it can\u2019t petal fold cleanly. Try it on a preliminary base.' };
+    return chain(state, [
+      s => foldOp(s, L1, Math.sign(side(L1, B)), 'inside', 2),
+      s => foldOp(s, L2, Math.sign(side(L2, D)), 'inside', 2),
+      s => foldOp(s, H, Math.sign(side(H, C)), 'valley', 1, f => {
+        const c = centroid(fold(f)), s1 = side(L1, c) * side(L1, kD), s2 = side(L2, c) * side(L2, kB);
+        return s1 > 0 && s2 > 0;
+      }),
+    ]);
+  }
+
+  // Bend: split along a line and report which facets move (no flat change).
+  function bendSplit(state, L, sgn, layerN, seedPred) {
+    let fs = clone(state);
+    fs = splitAll(fs, L);
+    const { M } = movingSet(fs, L, sgn, layerN, seedPred);
+    if (!M.size) return { error: 'Nothing to bend on that side. Draw the line across the paper.' };
+    if (M.size === fs.length) return { error: 'That line misses the paper. Draw it across the part you want to bend.' };
+    return { facets: fs.map(f => ({ id: f.id, poly: f.poly, T: f.T, layer: f.layer, origin: f.origin })), set: [...M].map(i => fs[i].id) };
+  }
+
+  function transformAll(state, M, flipLayers, theta) {
+    const fs = clone(state).map(f => {
+      const g = { ...f, origin: f.id, T0: f.T.slice(), steps: [] };
+      if (theta) g.steps.push({ line: { p: [0, 0], d: [0, 1] }, theta });
+      g.T = comp(M, f.T);
+      if (flipLayers) g.layer = -f.layer;
+      return g;
+    });
+    return { facets: finish(fs) };
+  }
+  const turnOver = (state) => transformAll(state, [-1, 0, 0, 1, 0, 0], true, Math.PI);
+  function rotate(state, ang) {
+    const c = Math.cos(ang), s = Math.sin(ang);
+    return transformAll(state, [c, -s, s, c, 0, 0], false, 0);
+  }
+  function recenter(state) {
+    const b = bbox(state.flatMap(fold));
+    return transformAll(state, [1, 0, 0, 1, -(b[0] + b[2]) / 2, -(b[1] + b[3]) / 2], false, 0);
+  }
+
+  // Edges worth drawing: raw paper edges and real creases (neighbor folded differently).
+  function drawnEdges(fs) {
+    const nb = neighbors(fs);
+    return fs.map((f, i) => {
+      const segs = [];
+      const n = f.poly.length;
+      for (let k = 0; k < n; k++) {
+        const a = f.poly[k], b = f.poly[(k+1) % n];
+        const ex = b[0] - a[0], ey = b[1] - a[1], len2 = ex*ex + ey*ey;
+        // collect covered intervals by flat (same-T) neighbors
+        const cov = [];
+        for (const { j, seg } of nb[i]) {
+          const g = fs[j];
+          const same = g.T.every((v, m) => Math.abs(v - f.T[m]) < 1e-6);
+          if (!same) continue;
+          const on = seg.every(p => Math.abs(ex*(p[1] - a[1]) - ey*(p[0] - a[0])) < 1e-7);
+          if (!on) continue;
+          const t = seg.map(p => ((p[0] - a[0])*ex + (p[1] - a[1])*ey) / len2).sort((x, y) => x - y);
+          cov.push(t);
+        }
+        cov.sort((x, y) => x[0] - y[0]);
+        let cur = 0;
+        for (const [t0, t1] of cov) {
+          if (t0 > cur + 1e-6) segs.push([[a[0] + ex*cur, a[1] + ey*cur], [a[0] + ex*t0, a[1] + ey*t0]]);
+          cur = Math.max(cur, t1);
+        }
+        if (cur < 1 - 1e-6) segs.push([[a[0] + ex*cur, a[1] + ey*cur], b]);
+      }
+      return segs;
+    });
+  }
+
+  return { newPaper, foldOp, squashOp, petalOp, pullOp, bendSplit, hull, turnOver, rotate, recenter, levels, drawnEdges, fold, ap, comp, refl, side, centroid, bbox, area };
+})();
+if (typeof module !== 'undefined') module.exports = Engine;
+(() => {
+const E = Engine;
+const $ = (s) => document.querySelector(s);
+const stage = $('#stage');
+
+// ---------- three.js setup ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
+const HOME = new THREE.Vector3(0, -0.0001, 6.2);
+let resizedOnce = false;
+camera.position.copy(HOME);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.12;
+controls.enableRotate = false; controls.enablePan = false;
+controls.minDistance = 1.2; controls.maxDistance = 14;
+controls.screenSpacePanning = true;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa8a0, 0.75));
+const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(2, 3, 6); scene.add(sun);
+const under = new THREE.DirectionalLight(0xffffff, 0.35); under.position.set(-2, -2, -5); scene.add(under);
+
+// cutting mat
+let matMesh;
+(function mat() {
+  const c = document.createElement('canvas'); c.width = c.height = 1024;
+  const g = c.getContext('2d');
+  g.fillStyle = '#23473e'; g.fillRect(0, 0, 1024, 1024);
+  for (let i = 0; i <= 64; i++) {
+    const x = i * 16;
+    g.strokeStyle = i % 8 === 0 ? 'rgba(220,240,230,.28)' : 'rgba(220,240,230,.10)';
+    g.lineWidth = i % 8 === 0 ? 2 : 1;
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 1024); g.stroke();
+    g.beginPath(); g.moveTo(0, x); g.lineTo(1024, x); g.stroke();
+  }
+  g.strokeStyle = 'rgba(220,240,230,.22)'; g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(1024, 1024); g.moveTo(1024, 0); g.lineTo(0, 1024); g.stroke();
+  const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+  m.position.z = -0.004; scene.add(m); matMesh = m;
+})();
+
+const matFront = new THREE.MeshStandardMaterial({ color: 0xc9483b, roughness: 0.85, side: THREE.FrontSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const matBack = new THREE.MeshStandardMaterial({ color: 0xfbfaf5, roughness: 0.9, side: THREE.BackSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const matEdge = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45 });
+const paperGroup = new THREE.Group(); scene.add(paperGroup);
+const overlay = new THREE.Group(); scene.add(overlay);
+
+// ---------- state ----------
+let facets = E.newPaper();
+let history = [], future = [];
+let bends = [], bendSeq = 1;
+let tool = 'valley', method = 'line', phase = 'idle', viewMode = false, busy = false;
+let start = null, end = null, crease = null, pA = null;
+let thickness = 0.0009 * 7;
+let meshes = [], levelsNow = [], snapPts = [], extraSnaps = [];
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.fov = 32;
+  camera.updateProjectionMatrix();
+  const fit = 3.3, dist = (fit / 2) / Math.tan(16 * Math.PI / 180) / Math.min(1, camera.aspect) + 0.3;
+  const fresh = camera.position.distanceTo(HOME) < 1e-6;
+  HOME.z = dist;
+  if (fresh || !resizedOnce) camera.position.copy(HOME);
+  resizedOnce = true;
+}
+window.addEventListener('resize', resize); resize();
+
+// ---------- geometry → meshes ----------
+function rotAbout(v, L, th, zA) {
+  const dx = L.d[0], dy = L.d[1];
+  const wx = v[0] - L.p[0], wy = v[1] - L.p[1], wz = v[2] - zA;
+  const c = Math.cos(th), s = Math.sin(th), dot = dx*wx + dy*wy;
+  return [L.p[0] + wx*c + (dy*wz)*s + dx*dot*(1 - c),
+          L.p[1] + wy*c + (-dx*wz)*s + dy*dot*(1 - c),
+          zA + wz*c + (dx*wy - dy*wx)*s];
+}
+const ease = (u) => u < 0.5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3) / 2;
+
+let spacing = thickness;
+function zOf(level) { return 0.0015 + level * spacing; }
+function updateSpacing() { const m = Math.max(1, ...levelsNow); spacing = Math.min(thickness, 0.045 / m); }
+
+function buildMeshes() {
+  for (const m of meshes) { paperGroup.remove(m.front, m.back, m.edges); m.geo.dispose(); m.egeo.dispose(); }
+  meshes = [];
+  const edges = E.drawnEdges(facets);
+  levelsNow = E.levels(facets).lv;
+  updateSpacing();
+  facets.forEach((f, i) => {
+    const n = f.poly.length;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    const idx = []; for (let k = 1; k < n - 1; k++) idx.push(0, k, k + 1);
+    geo.setIndex(idx);
+    const segs = edges[i];
+    const egeo = new THREE.BufferGeometry();
+    egeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(Math.max(1, segs.length) * 6), 3));
+    const front = new THREE.Mesh(geo, matFront), back = new THREE.Mesh(geo, matBack);
+    const el = new THREE.LineSegments(egeo, matEdge);
+    paperGroup.add(front, back, el);
+    meshes.push({ f, geo, egeo, front, back, edges: el, segs });
+  });
+  poseAll(null, 1);
+  snapPts = [];
+  for (const f of facets) for (const p of E.fold(f)) snapPts.push(p);
+  edges.forEach((segs, i) => { for (const s of segs) { const a = E.ap(facets[i].T, s[0]), b = E.ap(facets[i].T, s[1]); snapPts.push([(a[0]+b[0])/2, (a[1]+b[1])/2]); } });
+  snapPts.push([0, 0]);
+}
+
+// bends that move this facet, innermost first
+function bendsFor(f) {
+  const out = [];
+  for (const b of bends) if (b.set.includes(f.id)) {
+    const c = E.centroid(E.fold(f));
+    const sg = Math.sign(E.side(b.line, c)) || 1;
+    out.push({ line: b.line, th: b.dir * sg * b.angle * Math.PI / 180, n: b.set.length, zA: b.zA });
+  }
+  return out.sort((x, y) => x.n - y.n);
+}
+// every layer of a bent flap turns around the same hinge, so the stack stays together
+function bendHinges() {
+  const zById = new Map(facets.map((f, i) => [f.id, zOf(levelsNow[i])]));
+  for (const b of bends) {
+    const zs = b.set.map(id => zById.get(id)).filter(z => z != null);
+    b.zA = zs.length ? (b.dir > 0 ? Math.max(...zs) : Math.min(...zs)) : 0;
+  }
+}
+// anim: { oldLevels: Map(origin→level), u }
+function poseAll(anim, u) {
+  if (!anim && bends.length) bendHinges();
+  meshes.forEach((m, i) => {
+    const f = m.f;
+    let map;
+    if (anim) {
+      const a = f.anim, z0 = zOf(anim.old.get(a.origin) ?? levelsNow[i]), z1 = zOf(levelsNow[i]);
+      const e = ease(u), k = a.steps.length;
+      map = (p) => {
+        const q = E.ap(a.T0, p); let v = [q[0], q[1], z0];
+        const K = a.stages || k;
+        a.steps.forEach((s, j) => { const pr = Math.min(1, Math.max(0, e*K - (s.stage ?? j))); if (pr > 0) v = rotAbout(v, s.line, s.theta * pr, z0); });
+        v[2] += (z1 - z0) * e; return v;
+      };
+    } else {
+      const z = zOf(levelsNow[i]);
+      const mine = bendsFor(f);
+      map = (p) => {
+        const q = E.ap(f.T, p); let v = [q[0], q[1], z];
+        for (const b of mine) v = rotAbout(v, b.line, b.th, b.zA ?? z);
+        return v;
+      };
+    }
+    const pos = m.geo.attributes.position.array;
+    f.poly.forEach((p, k) => { const v = map(p); pos[k*3] = v[0]; pos[k*3+1] = v[1]; pos[k*3+2] = v[2]; });
+    m.geo.attributes.position.needsUpdate = true; m.geo.computeVertexNormals(); m.geo.computeBoundingSphere();
+    const ep = m.egeo.attributes.position.array;
+    m.segs.forEach((s, k) => { const a = map(s[0]), b = map(s[1]); ep.set(a, k*6); ep.set(b, k*6 + 3); });
+    m.egeo.setDrawRange(0, m.segs.length * 2);
+    m.egeo.attributes.position.needsUpdate = true; m.egeo.computeBoundingSphere();
+  });
+}
+
+function applyResult(next, animate, dur, nb) {
+  if (standing) { standing = false; matMesh.rotation.x = 0; matMesh.position.set(0, 0, -0.004); standLabel(false); }
+  if (next && next.f) { nb = next.b; next = next.f; }
+  bends = nb ? cloneBends(nb) : [];
+  const prevLv = E.levels(facets).lv, old = new Map();
+  facets.forEach((f, i) => old.set(f.id, prevLv[i]));
+  facets = next.map(f => ({ id: f.id, poly: f.poly, T: f.T, layer: f.layer, anim: f.anim }));
+  buildMeshes();
+  updateButtons(); renderBends();
+  if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { poseAll(null, 1); return Promise.resolve(); }
+  busy = true;
+  return new Promise(res => {
+    const t0 = performance.now();
+    const tick = (t) => {
+      const u = Math.min(1, (t - t0) / dur);
+      poseAll({ old }, u);
+      if (u < 1) requestAnimationFrame(tick); else { poseAll(null, 1); busy = false; res(); }
+    };
+    requestAnimationFrame(tick);
+  });
+}
+const plain = (fs) => fs.map(f => ({ id: f.id, poly: f.poly, T: f.T, layer: f.layer }));
+const cloneBends = (bs) => bs.map(b => ({ ...b, line: { p: b.line.p.slice(), d: b.line.d.slice() }, set: b.set.slice() }));
+const snapshot = () => ({ f: plain(facets), b: cloneBends(bends) });
+let notify = () => {};
+function commit(result, dur = 750, evt = 'fold') {
+  if (result.error) { toast(result.error); return Promise.resolve(false); }
+  if (bends.length) toast('The bends were flattened so the paper could fold. Undo brings them back.', true);
+  history.push(snapshot()); future = [];
+  return applyResult(result.facets, true, dur).then(() => { notify(evt); return true; });
+}
+
+// ---------- overlay ----------
+const ovMat = (c, o) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, depthTest: false, side: THREE.DoubleSide });
+const snapDot = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.034, 28), ovMat(0xffffff, 0.95)); snapDot.renderOrder = 10; overlay.add(snapDot);
+const markA = new THREE.Mesh(new THREE.CircleGeometry(0.03, 24), ovMat(0xffd447, 1)); markA.renderOrder = 10; overlay.add(markA);
+const sideMesh = new THREE.Mesh(new THREE.BufferGeometry(), ovMat(0xffd447, 0.22)); sideMesh.renderOrder = 9; overlay.add(sideMesh);
+const creaseLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({ color: 0xffd447, dashSize: 0.06, gapSize: 0.04, depthTest: false }));
+creaseLine.renderOrder = 11; overlay.add(creaseLine);
+const segLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true, opacity: .7 }));
+segLine.renderOrder = 11; overlay.add(segLine);
+function topZ() { return zOf(Math.max(0, ...levelsNow)) + 0.01; }
+function modelBox() { const b = E.bbox(facets.flatMap(E.fold)); return [b[0] - 0.25, b[1] - 0.25, b[2] + 0.25, b[3] + 0.25]; }
+function clipBox(L, sgn) {
+  const b = modelBox();
+  let poly = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], c = poly[(i+1) % poly.length], sa = E.side(L, a) * sgn, sc = E.side(L, c) * sgn;
+    if (sa >= 0) out.push(a);
+    if (sa * sc < 0) { const t = sa / (sa - sc); out.push([a[0] + (c[0]-a[0])*t, a[1] + (c[1]-a[1])*t]); }
+  }
+  return out;
+}
+function lineAcross(L) {
+  const b = modelBox(), r = Math.hypot(b[2]-b[0], b[3]-b[1]);
+  const c = [(b[0]+b[2])/2, (b[1]+b[3])/2];
+  const t = (c[0]-L.p[0])*L.d[0] + (c[1]-L.p[1])*L.d[1];
+  const m = [L.p[0] + L.d[0]*t, L.p[1] + L.d[1]*t];
+  return [[m[0] - L.d[0]*r, m[1] - L.d[1]*r], [m[0] + L.d[0]*r, m[1] + L.d[1]*r]];
+}
+function setLine(obj, pts) {
+  const z = topZ();
+  obj.geometry.dispose();
+  obj.geometry = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(p[0], p[1], z)));
+  if (obj.computeLineDistances) obj.computeLineDistances();
+  obj.visible = true;
+}
+function setSide(L, sgn) {
+  const pts = clipBox(L, sgn), z = topZ();
+  if (pts.length < 3) { sideMesh.visible = false; return; }
+  const g = new THREE.BufferGeometry();
+  const arr = []; for (let k = 1; k < pts.length - 1; k++) for (const p of [pts[0], pts[k], pts[k+1]]) arr.push(p[0], p[1], z);
+  g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+  sideMesh.geometry.dispose(); sideMesh.geometry = g; sideMesh.visible = true;
+}
+function clearOverlay() { creaseLine.visible = segLine.visible = sideMesh.visible = markA.visible = false; }
+clearOverlay(); snapDot.visible = false;
+function creaseColor() { creaseLine.material.color.set(tool === 'mountain' || tool === 'outside' ? 0x8fd3ff : 0xffd447); creaseLine.material.dashSize = tool === 'mountain' ? 0.09 : 0.06; }
+
+// ---------- input ----------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function worldAt(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -topZ() + 0.01);
+  const hit = new THREE.Vector3();
+  return ray.ray.intersectPlane(plane, hit) ? [hit.x, hit.y] : null;
+}
+function snap(p, ev) {
+  const dist = camera.position.distanceTo(controls.target);
+  const perPx = 2 * dist * Math.tan(camera.fov * Math.PI / 360) / stage.clientHeight;
+  const tol = perPx * (ev && ev.pointerType === 'touch' ? 26 : 14);
+  let best = null, bd = tol;
+  for (const q of snapPts.concat(extraSnaps)) { const d = Math.hypot(q[0]-p[0], q[1]-p[1]); if (d < bd) { bd = d; best = q; } }
+  return best ? { p: best.slice(), snapped: true } : { p, snapped: false };
+}
+function showSnap(s) {
+  if (s && s.snapped) { snapDot.position.set(s.p[0], s.p[1], topZ()); snapDot.visible = true; } else snapDot.visible = false;
+}
+const norm = (v) => { const l = Math.hypot(v[0], v[1]); return [v[0]/l, v[1]/l]; };
+
+const el = renderer.domElement;
+let downInfo = null;
+el.addEventListener('pointerdown', (ev) => {
+  if (viewMode || busy || ev.button !== 0) return;
+  const w = worldAt(ev); if (!w) return;
+  const s = snap(w, ev);
+  if (phase === 'pickSide') { downInfo = { side: Math.sign(E.side(crease, w)) || 1, tap: w }; return; }
+  if (tool === 'petal') { runPetal(s.p); return; }
+  if (method === 'p2p' && tool !== 'squash' && tool !== 'bend' && tool !== 'pull') {
+    if (phase === 'idle') { pA = s.p; phase = 'p2pA'; markA.position.set(pA[0], pA[1], topZ()); markA.visible = true; hint(); return; }
+    if (phase === 'p2pA') {
+      const B = s.p; if (Math.hypot(B[0]-pA[0], B[1]-pA[1]) < 0.01) return;
+      const L = { p: [(pA[0]+B[0])/2, (pA[1]+B[1])/2], d: norm([-(B[1]-pA[1]), B[0]-pA[0]]) };
+      const sg = Math.sign(E.side(L, pA)) || 1;
+      phase = 'idle'; clearOverlay(); hint();
+      run(L, sg, pA); return;
+    }
+  }
+  if (phase === 'idle') {
+    start = s.p; end = s.p; phase = 'drawing';
+    el.setPointerCapture(ev.pointerId);
+    hint();
+  }
+});
+el.addEventListener('pointermove', (ev) => {
+  if (viewMode || busy) { snapDot.visible = false; return; }
+  const w = worldAt(ev); if (!w) return;
+  const s = snap(w, ev);
+  if (phase === 'drawing') {
+    end = s.p; showSnap(s);
+    if (Math.hypot(end[0]-start[0], end[1]-start[1]) > 0.02) {
+      const L = { p: start, d: norm([end[0]-start[0], end[1]-start[1]]) };
+      creaseColor(); setLine(creaseLine, lineAcross(L)); setLine(segLine, [start, end]);
+    }
+  } else if (phase === 'pickSide') {
+    snapDot.visible = false;
+    setSide(crease, Math.sign(E.side(crease, w)) || 1);
+  } else if (phase === 'p2pA') {
+    showSnap(s);
+    if (Math.hypot(s.p[0]-pA[0], s.p[1]-pA[1]) > 0.02) {
+      const L = { p: [(pA[0]+s.p[0])/2, (pA[1]+s.p[1])/2], d: norm([-(s.p[1]-pA[1]), s.p[0]-pA[0]]) };
+      creaseColor(); setLine(creaseLine, lineAcross(L)); setLine(segLine, [pA, s.p]);
+      setSide(L, Math.sign(E.side(L, pA)) || 1);
+    }
+  } else showSnap(s);
+});
+el.addEventListener('pointerup', (ev) => {
+  if (viewMode || busy) return;
+  if (phase === 'drawing') {
+    if (end && Math.hypot(end[0]-start[0], end[1]-start[1]) > 0.03) {
+      crease = { p: start.slice(), d: norm([end[0]-start[0], end[1]-start[1]]) };
+      phase = 'pickSide'; segLine.visible = false;
+      const w = worldAt(ev); if (w) setSide(crease, Math.sign(E.side(crease, w)) || 1);
+    } else { phase = 'idle'; clearOverlay(); }
+    hint(); return;
+  }
+  if (phase === 'pickSide' && downInfo) {
+    const sg = downInfo.side, tap = downInfo.tap; downInfo = null;
+    const L = crease; phase = 'idle'; clearOverlay(); hint();
+    run(L, sg, tap);
+  }
+});
+el.addEventListener('contextmenu', (ev) => { ev.preventDefault(); cancel(); });
+function cancel() { phase = 'idle'; downInfo = null; clearOverlay(); hint(); }
+
+function layerN() { return +$('#layers').value; }
+function inPoly(pt, P) {
+  let s0 = 0;
+  for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i+1) % P.length]; const c = (b[0]-a[0])*(pt[1]-a[1]) - (b[1]-a[1])*(pt[0]-a[0]); if (Math.abs(c) < 1e-9) continue; if (!s0) s0 = Math.sign(c); else if (Math.sign(c) !== s0) return false; }
+  return true;
+}
+function seedAt(tap) { return tap ? (f) => inPoly(tap, E.fold(f)) : undefined; }
+function run(L, sg, tap) {
+  const st = tut && tut.def.steps[tut.i];
+  if (st && st.exact && tap) {
+    const X = st.exact, cross = Math.abs(L.d[0]*X.d[1] - L.d[1]*X.d[0]);
+    if (cross < Math.sin(8 * Math.PI / 180) && Math.abs(E.side(L, X.p)) < 0.1) { L = X; sg = Math.sign(E.side(X, tap)) || sg; }
+  }
+  const n = layerN();
+  const flapTool = tool !== 'valley' && tool !== 'mountain';
+  const seed = (n !== 0 || flapTool) && tap && E.side(L, tap) * sg > 0 ? seedAt(tap) : undefined;
+  if (tool === 'bend') return addBend(L, sg, seed, (st && st.bendAngle) || 90, (st && st.bendDir) || 1, true, st && st.wing && L === st.exact ? wingSet(facets, L, st.wing) : undefined);
+  if (tool === 'pull') return commit(tap ? E.pullOp(facets, L, sg, tap) : { error: 'Tap the part of the hidden flap you want to pull out.' }, 1000);
+  const r = tool === 'squash' ? E.squashOp(facets, L, sg, n || 2, seed) : E.foldOp(facets, L, sg, tool, n, seed);
+  if (r.error && seed && /Nothing/.test(r.error)) r.error = 'Tap right on the part of the paper you want to fold.';
+  return commit(r, tool === 'squash' ? 1300 : tool === 'sink' || tool === 'inside' || tool === 'outside' ? 1000 : 750);
+}
+function runPetal(tap) { return commit(E.petalOp(facets, tap), 2100); }
+
+// ---------- bends (partial folds) ----------
+function addBend(L, sg, seed, angle = 90, dir = 1, animate = true, preset) {
+  const r = preset ? { facets: facets.map(f => ({ ...f, origin: undefined })), set: preset } : E.bendSplit(facets, L, sg, layerN(), seed);
+  if (r.error) { toast(r.error); return Promise.resolve(false); }
+  // carry existing bends over to split facets
+  const mapSet = (set) => r.facets.filter(f => set.includes(f.id) || (f.origin != null && f.origin !== f.id && set.includes(f.origin))).map(f => f.id);
+  const nb = cloneBends(bends).map(b => ({ ...b, set: mapSet(b.set) }));
+  const S = new Set(r.set);
+  for (const b of nb) {
+    const inter = b.set.filter(id => S.has(id)).length;
+    if (inter && inter !== b.set.length && inter !== S.size) { toast('That bend would cross another bend in a way paper can’t move. Remove the other bend first.'); return Promise.resolve(false); }
+  }
+  const bend = { id: bendSeq++, line: { p: L.p.slice(), d: L.d.slice() }, set: r.set, angle: animate ? 0 : angle, dir };
+  history.push(snapshot()); future = [];
+  applyResult(r.facets.map(f => ({ id: f.id, poly: f.poly, T: f.T, layer: f.layer })), false, 0, nb.concat([bend]));
+  const live = bends[bends.length - 1];
+  if ($('#tools')) $('#tools').classList.add('showsettings');
+  if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { live.angle = angle; poseAll(null, 1); renderBends(); notify('bend'); return Promise.resolve(true); }
+  busy = true;
+  return new Promise(res => {
+    const t0 = performance.now();
+    const tick = (t) => {
+      const u = Math.min(1, (t - t0) / 700); live.angle = angle * ease(u); poseAll(null, 1);
+      if (u < 1) requestAnimationFrame(tick); else { busy = false; renderBends(); notify('bend'); res(true); }
+    };
+    requestAnimationFrame(tick);
+  });
+}
+function renderBends() {
+  const box = $('#bends'); if (!box) return;
+  if (!bends.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="sep"></div><div class="bends-head"><span>Bends</span><button type="button" data-b="flat">Flatten all</button></div>' +
+    bends.map((b, i) => `<div class="bend" data-id="${b.id}">
+      <label for="bend-${b.id}">Bend ${i + 1}</label>
+      <input type="range" id="bend-${b.id}" min="0" max="180" value="${Math.round(b.angle)}" aria-label="Bend ${i + 1} angle">
+      <output>${Math.round(b.angle)}°</output>
+      <button type="button" data-b="flip" title="Bend the other way" aria-label="Bend the other way"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg></button>
+      <button type="button" data-b="del" title="Remove this bend" aria-label="Remove this bend"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>`).join('');
+}
+document.addEventListener('input', (e) => {
+  const row = e.target.closest && e.target.closest('.bend'); if (!row || e.target.type !== 'range') return;
+  const b = bends.find(x => x.id === +row.dataset.id); if (!b) return;
+  b.angle = +e.target.value; row.querySelector('output').textContent = b.angle + '°'; poseAll(null, 1);
+});
+document.addEventListener('change', (e) => { const row = e.target.closest && e.target.closest('.bend'); if (row && e.target.type === 'range') notify('bend-angle'); });
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest && e.target.closest('[data-b]'); if (!btn || busy) return;
+  const act = btn.dataset.b;
+  if (act === 'flat') { history.push(snapshot()); future = []; bends = []; poseAll(null, 1); renderBends(); updateButtons(); return; }
+  const row = btn.closest('.bend'); const b = bends.find(x => x.id === +row.dataset.id); if (!b) return;
+  if (act === 'flip') { b.dir *= -1; poseAll(null, 1); }
+  if (act === 'del') { history.push(snapshot()); future = []; bends = bends.filter(x => x !== b); poseAll(null, 1); renderBends(); updateButtons(); }
+});
+
+// ---------- UI ----------
+const HINTS = {
+  line: 'Drag across the paper to draw a crease.',
+  p2p: 'Tap the point you want to move.',
+  squash: 'Drag along the hinge of the flap you want to squash.',
+};
+function hint() {
+  let t;
+  if (viewMode) t = 'Drag to turn the model, scroll or pinch to zoom. Press Look around again to fold.';
+  else if (phase === 'drawing') t = tool === 'squash' ? 'Let go when the line sits on the flap\u2019s hinge.' : 'Let go to place the crease. Points snap to corners and edges.';
+  else if (phase === 'pickSide') t = tool === 'squash' ? 'Tap the flap to squash it open.' : tool === 'mountain' ? 'Tap the side that should fold behind.' : tool === 'bend' ? 'Tap the part that should lift up.' : tool === 'pull' ? 'Tap the hidden flap you want to pull out.' : tool === 'valley' ? 'Tap the side that should fold over.' : 'Tap the tip that should reverse.';
+  else if (phase === 'p2pA') t = 'Tap where that point should land.';
+  else t = tool === 'squash' ? HINTS.squash : tool === 'petal' ? 'Tap the open corner of the top flap. It lifts while both sides fold in.' : tool === 'bend' ? 'Drag a line where the paper should bend, then tap the part that lifts.' : tool === 'pull' ? 'Drag along the hinge of a hidden flap, then tap the flap to pull it out.' : HINTS[method];
+  $('#hint').innerHTML = `<span>${t}</span>` + (phase !== 'idle' ? '<button class="cancel" type="button">Cancel</button>' : '');
+  const c = $('#hint .cancel'); if (c) c.addEventListener('click', cancel);
+}
+let toastTimer;
+function toast(msg, info) { const t = $('#toast'); t.textContent = msg; t.classList.toggle('info', !!info); t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 4200); }
+
+const DEFAULT_LAYERS = { valley: '0', mountain: '0', inside: '0', outside: '0', sink: '0', squash: '2', petal: '0', bend: '1', pull: '0' };
+function setTool(t) {
+  tool = t; cancel();
+  document.querySelectorAll('.tool[data-tool]').forEach(b => { b.setAttribute('aria-checked', b.dataset.tool === t); if (b.dataset.tool === t) $('#tooldesc').textContent = b.querySelector('small').textContent + '.'; });
+  $('#layers').value = DEFAULT_LAYERS[t];
+  $('#layers').disabled = t === 'sink' || t === 'petal' || t === 'pull';
+  hint();
+}
+document.querySelectorAll('.tool[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+function setMethod(m) {
+  method = m; cancel();
+  document.querySelectorAll('[data-method]').forEach(x => x.setAttribute('aria-pressed', x.dataset.method === m));
+  hint();
+}
+document.querySelectorAll('[data-method]').forEach(b => b.addEventListener('click', () => setMethod(b.dataset.method)));
+$('#moreset').addEventListener('click', () => { const tl = $('#tools'); tl.classList.toggle('showsettings'); $('#moreset').setAttribute('aria-expanded', tl.classList.contains('showsettings')); });
+$('#thick').addEventListener('input', (e) => { thickness = 0.0009 * +e.target.value; updateSpacing(); poseAll(null, 1); });
+$('#cf').addEventListener('input', (e) => matFront.color.set(e.target.value));
+$('#cb').addEventListener('input', (e) => matBack.color.set(e.target.value));
+
+function updateButtons() { $('#undo').disabled = !history.length; $('#redo').disabled = !future.length; }
+function undo() { if (busy || !history.length) return; cancel(); future.push(snapshot()); applyResult(history.pop(), false); notify('undo'); }
+function redo() { if (busy || !future.length) return; cancel(); history.push(snapshot()); applyResult(future.pop(), false); }
+$('#undo').addEventListener('click', undo);
+$('#redo').addEventListener('click', redo);
+$('#turn').addEventListener('click', () => { if (!busy) { cancel(); commit(E.turnOver(facets), 900, 'turn'); } });
+$('#rot').addEventListener('click', () => { if (!busy) { cancel(); commit(E.rotate(facets, Math.PI / 4), 0); } });
+function setView(on) {
+  if (!on && standing) { standing = false; standLabel(false); animateTo(false, HOME.clone(), new THREE.Vector3(0, 0, 0), 900); }
+  viewMode = on; cancel(); controls.enableRotate = on; controls.enablePan = on;
+  $('#view').setAttribute('aria-pressed', on); snapDot.visible = false;
+  el.style.cursor = on ? 'grab' : 'crosshair'; hint();
+  notify(on ? 'view-on' : 'view-off');
+}
+$('#view').addEventListener('click', () => setView(!viewMode));
+el.style.cursor = 'crosshair';
+
+const menu = $('#menu');
+$('#more').addEventListener('click', (e) => { e.stopPropagation(); const o = menu.classList.toggle('open'); $('#more').setAttribute('aria-expanded', o); });
+document.addEventListener('click', () => { menu.classList.remove('open'); $('#more').setAttribute('aria-expanded', false); });
+menu.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b || busy) return;
+  const a = b.dataset.act; cancel();
+  if (a === 'new') { history.push(snapshot()); future = []; applyResult(E.newPaper(), false); }
+  if (a === 'center') commit(E.recenter(facets), 0);
+  if (a === 'resetview') resetView();
+  if (a === 'stand') setStanding(!standing);
+  if (a && a.startsWith('demo-')) { endTutorial(); demo(a.slice(5)); }
+});
+function resetView() { camera.position.copy(HOME); controls.target.set(0, 0, 0); controls.update(); }
+
+window.addEventListener('keydown', (e) => {
+  if (e.target.matches('input,select')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+  if (e.key === 'Escape') cancel();
+  if (e.key === ' ' && !e.target.matches('button')) { e.preventDefault(); setView(!viewMode); }
+  const map = { v: 'valley', m: 'mountain', i: 'inside', o: 'outside', s: 'sink', q: 'squash', p: 'petal', b: 'bend', u: 'pull' };
+  if (!e.ctrlKey && !e.metaKey && map[e.key.toLowerCase()]) setTool(map[e.key.toLowerCase()]);
+  if (e.key.toLowerCase() === 't' && !busy) commit(E.turnOver(facets), 900, 'turn');
+  if (e.key.toLowerCase() === 'r' && !busy) commit(E.rotate(facets, Math.PI / 4), 0);
+});
+
+// ---------- demos ----------
+const S = Math.SQRT1_2;
+function prelimBase() {
+  let s = E.turnOver(E.newPaper()).facets;
+  for (const fn of [s => E.foldOp(s, { p: [0,0], d: [S,-S] }, 1, 'valley', 0), s => E.foldOp(s, { p: [0,0], d: [-S,-S] }, 1, 'valley', 0),
+    s => E.squashOp(s, { p: [0,0], d: [S,S] }, 1, 2), s => E.turnOver(s), s => E.squashOp(s, { p: [0,0], d: [S,-S] }, 1, 2),
+    s => E.rotate(s, -Math.PI / 4), s => E.recenter(s)]) s = fn(s).facets;
+  return { facets: s.map(f => ({ ...f, anim: undefined })) };
+}
+const dirA = (deg) => [Math.cos(deg * Math.PI / 180), Math.sin(deg * Math.PI / 180)];
+// One fold of the elephant: line through p at angle deg, folding the part around tap.
+function eFold(mode, p, deg, tap, all) {
+  const L = { p, d: dirA(deg) };
+  return s => E.foldOp(s, L, Math.sign(E.side(L, tap)), mode, 0, all ? undefined : (f => inPoly(tap, E.fold(f))));
+}
+const ELEPHANT = [
+  { text: 'Valley fold the bottom edge onto the diagonal.', tool: 'valley', p: [-1, -1], deg: 22.5, tap: [0.8, -0.8], all: true },
+  { text: 'Valley fold the left edge onto the diagonal. That\u2019s a kite.', tool: 'valley', p: [-1, -1], deg: 67.5, tap: [-0.8, 0.8], all: true },
+  { text: 'Fold the narrow point over to the opposite corner.', tool: 'valley', p: [0, 0], deg: -45, tap: [-0.9, -0.9], all: true },
+  { text: 'Valley fold in half along the diagonal, so the point ends up inside.', tool: 'valley', p: [0, 0], deg: 45, tap: [-0.2, 0.6], all: true },
+  { text: 'Turning it so the folded edge is on top.', rotate: -45 },
+  { text: 'Pull out the point hidden inside. It becomes the trunk.', tool: 'pull', p: [0, 0], deg: 90, tap: [0.5, -0.1] },
+  { text: 'Shift the trunk inward, part 1: inside reverse fold it down at the head.', tool: 'inside', p: [-0.1, 0], deg: 200, tap: [-1.3, -0.02] },
+  { text: 'Shift the trunk inward, part 2: outside reverse fold it so it hangs down. That shapes the forehead.', tool: 'outside', p: [-0.3298, -0.1928], deg: 240, tap: [-0.72, -0.42] },
+  { text: 'Inside reverse fold the tip of the trunk so it curls out.', tool: 'inside', p: [-0.4618, -0.9413], deg: 215, tap: [-0.45, -1.05] },
+  { text: 'Inside reverse fold the back corner down for the hind legs.', tool: 'inside', p: [0.45, 0], deg: 330, tap: [1.35, -0.02] },
+  { text: 'Bend the trunk toward you to give it a 3D curl.', bend: true, p: [-0.3, -0.62], deg: 0, tap: [-0.4, -0.85], angle: 40 },
+];
+const ELE_COLORS = ['#8d9196', '#9da1a6'];
+function eLine(st) { return { p: st.p, d: dirA(st.deg) }; }
+function eSeed(st) { return st.all ? undefined : (f => inPoly(st.tap, E.fold(f))); }
+function wingSet(fs, L, which) {
+  // the two paper corners that end up lowest are the neck and tail tips; pieces nearest those
+  // corners belong to the neck and tail. Everything else above the hinge is wing, split by layer.
+  const up = E.side(L, [0, 5]);
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(c => {
+    const f = fs.find(g => g.poly.some(p => Math.hypot(p[0] - c[0], p[1] - c[1]) < 1e-6));
+    return { c, y: E.ap(f.T, c)[1] };
+  }).sort((x, y) => x.y - y.y);
+  const legs = corners.slice(0, 2).map(o => o.c), all = corners.map(o => o.c);
+  const near = (pc) => all.reduce((b, c) => Math.hypot(pc[0] - c[0], pc[1] - c[1]) < Math.hypot(pc[0] - b[0], pc[1] - b[1]) ? c : b);
+  const wing = fs.filter(f => {
+    const c = E.centroid(E.fold(f)); if (E.side(L, c) * up <= 0) return false;
+    return !legs.includes(near(E.centroid(f.poly)));
+  });
+  // split into connected pieces of paper (not counting joins along the hinge)
+  const adj = wing.map(() => []);
+  for (let i = 0; i < wing.length; i++) for (let j = i + 1; j < wing.length; j++) {
+    const s = sharedEdge(wing[i], wing[j]);
+    if (s && !s.every(p => Math.abs(E.side(L, E.ap(wing[i].T, p))) < 1e-6)) { adj[i].push(j); adj[j].push(i); }
+  }
+  const comp = new Array(wing.length).fill(-1), groups = [];
+  for (let i = 0; i < wing.length; i++) if (comp[i] < 0) {
+    const g = [i]; comp[i] = groups.length;
+    for (let k = 0; k < g.length; k++) for (const j of adj[g[k]]) if (comp[j] < 0) { comp[j] = groups.length; g.push(j); }
+    groups.push(g);
+  }
+  const area = (g) => g.reduce((s, i) => s + Math.abs(E.area(E.fold(wing[i]))), 0);
+  const big = groups.sort((x, y) => area(y) - area(x)).slice(0, 2);
+  if (big.length < 2) return [];
+  const top = (g) => Math.max(...g.map(i => wing[i].layer));
+  big.sort((x, y) => top(y) - top(x));
+  const ids = big[which === 'front' ? 0 : 1].map(i => wing[i].id);
+  // the back of the bird between the wings: split it by layer and send each half with its wing
+  const taken = new Set(big.flat().map(i => wing[i].id));
+  const back = fs.filter(f => { const c = E.centroid(E.fold(f)); return E.side(L, c) * up > 0 && Math.abs(c[0]) < 0.25 && !taken.has(f.id); });
+  const bl = back.map(f => f.layer).sort((x, y) => x - y), bm = bl.length ? (bl[Math.floor((bl.length - 1) / 2)] + bl[Math.ceil((bl.length - 1) / 2)]) / 2 : 0;
+  return ids.concat(back.filter(f => which === 'front' ? f.layer > bm : f.layer < bm).map(f => f.id));
+}
+function sharedEdge(f, g) {
+  for (let i = 0; i < f.poly.length; i++) {
+    const a1 = f.poly[i], a2 = f.poly[(i + 1) % f.poly.length];
+    for (let j = 0; j < g.poly.length; j++) {
+      const b1 = g.poly[j], b2 = g.poly[(j + 1) % g.poly.length];
+      const m = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-6;
+      const ex = a2[0] - a1[0], ey = a2[1] - a1[1], l = Math.hypot(ex, ey); if (l < 1e-9) continue;
+      const col = (q) => Math.abs(ex * (q[1] - a1[1]) - ey * (q[0] - a1[0])) / l < 1e-7;
+      if (col(b1) && col(b2)) {
+        const t = (q) => ((q[0] - a1[0]) * ex + (q[1] - a1[1]) * ey) / (l * l);
+        const lo = Math.max(0, Math.min(t(b1), t(b2))), hi = Math.min(1, Math.max(t(b1), t(b2)));
+        if ((hi - lo) * l > 1e-6) return [[a1[0] + ex * lo, a1[1] + ey * lo], [a1[0] + ex * hi, a1[1] + ey * hi]];
+      }
+    }
+  }
+  return null;
+}
+function eApply(st, s) {
+  if (st.wing) return { facets: s, set: wingSet(s, eLine(st), st.wing) };
+  if (st.rotate != null) { const r = E.rotate(s, st.rotate * Math.PI / 180); return st.center ? E.recenter(r.facets) : r; }
+  if (st.turn) return E.turnOver(s);
+  if (st.tool === 'petal') return E.petalOp(s, st.tap);
+  const L = eLine(st), sg = Math.sign(E.side(L, st.tap));
+  if (st.bend) return E.bendSplit(s, L, sg, st.n || 0, eSeed(st));
+  if (st.tool === 'pull') return E.pullOp(s, L, sg, st.tap);
+  if (st.tool === 'squash') return E.squashOp(s, L, sg, st.n || 2, eSeed(st));
+  return E.foldOp(s, L, sg, st.tool, st.n || 0, eSeed(st));
+}
+function setColors(c) { if (!c) return; $('#cf').value = c[0]; $('#cb').value = c[1]; matFront.color.set(c[0]); matBack.color.set(c[1]); }
+function modelSteps(list) {
+  return list.map(st => st.bend
+    ? [st.text, { bends: [[eLine(st), st.tap, st.wing]], angle: st.angle, dir: st.dir || 1, layers: String(st.n || 0) }]
+    : [st.text, s => eApply(st, s), st.rotate != null ? 700 : st.turn ? 900 : st.tool === 'petal' ? 2200 : st.tool === 'squash' ? 1400 : 1100]);
+}
+function elephantSteps() { return modelSteps(ELEPHANT); }
+const S_ = Math.SQRT1_2;
+const CRANE = [
+  { text: 'Valley fold corner to corner.', tool: 'valley', p: [0, 0], deg: -45, tap: [0.8, 0.8], all: true },
+  { text: 'Fold the triangle in half.', tool: 'valley', p: [0, 0], deg: -135, tap: [0.5, -0.7], all: true },
+  { text: 'Squash the top flap into a square.', tool: 'squash', p: [0, 0], deg: 45, tap: [-0.62, 0.22], n: 2 },
+  { text: 'Turn the model over.', turn: true },
+  { text: 'Squash this flap too. That\u2019s a preliminary base.', tool: 'squash', p: [0, 0], deg: -45, tap: [0.62, 0.22], n: 2 },
+  { text: 'Turning it so the open end points down.', rotate: -45, center: true },
+  { text: 'Petal fold: tap the bottom corner to lift it.', tool: 'petal', tap: [0, -0.7071] },
+  { text: 'Turn the model over.', turn: true },
+  { text: 'Petal fold this side too. That\u2019s a bird base.', tool: 'petal', tap: [0, -0.7071] },
+  { text: 'Narrow the lower left edge: fold it to the center line.', tool: 'valley', p: [0, -0.7071], deg: 101.25, tap: [-0.15, -0.3], n: 1 },
+  { text: 'Narrow the lower right edge the same way.', tool: 'valley', p: [0, -0.7071], deg: 78.75, tap: [0.15, -0.3], n: 1 },
+  { text: 'Inside reverse fold the left point up. That\u2019s the neck.', tool: 'inside', p: [0, 0.05], deg: 197.5, tap: [-0.02, -0.5] },
+  { text: 'Inside reverse fold the right point up. That\u2019s the tail.', tool: 'inside', p: [0, 0.05], deg: -17.5, tap: [0.02, -0.5] },
+  { text: 'Inside reverse fold the tip of the neck to make the head.', tool: 'inside', p: [-0.2983, 0.4760], deg: 162.5, tap: [-0.3523, 0.5358] },
+  { text: 'Bend the front wing out toward you.', bend: true, p: [-0.4, 0.2929], deg: 0, tap: [0, 0.9], n: 1, angle: 88, dir: 1, wing: 'front' },
+  { text: 'Bend the back wing out the other way. I set Layers to Bottom 1 so the back wing moves.', bend: true, p: [-0.4, 0.2929], deg: 0, tap: [0, 0.9], n: -1, angle: 88, dir: -1, wing: 'back' },
+];
+const CRANE_COLORS = ['#c9483b', '#f3efe6'];
+// segment of line L that crosses the model (for tutorial guides)
+function crossing(fs, L) {
+  const h = E.hull(fs.flatMap(E.fold)), pts = [];
+  for (let i = 0; i < h.length; i++) {
+    const a = h[i], b = h[(i+1) % h.length], sa = E.side(L, a), sb = E.side(L, b);
+    if (Math.abs(sa) < 1e-9) pts.push(a);
+    else if (sa * sb < 0) { const t = sa / (sa - sb); pts.push([a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t]); }
+  }
+  if (pts.length < 2) return null;
+  let best = [pts[0], pts[1]], bd = 0;
+  for (const p of pts) for (const q of pts) { const d = Math.hypot(p[0]-q[0], p[1]-q[1]); if (d > bd) { bd = d; best = [p, q]; } }
+  return best;
+}
+function blintzSteps() {
+  const c1 = [[1,1],[-1,1],[-1,-1],[1,-1]], c2 = [[1,0],[0,1],[-1,0],[0,-1]];
+  const p2p = (A) => { const L = { p: [A[0]/2, A[1]/2], d: norm([A[1], -A[0]]) }; return s => E.foldOp(s, L, Math.sign(E.side(L, A)), 'valley', 0); };
+  return [
+    ...c1.map((A, i) => [i ? 'Next corner.' : 'Fold each corner to the center.', p2p(A)]),
+    ['Turn the model over.', s => E.turnOver(s), 900],
+    ...c2.map((A, i) => [i ? 'Next corner.' : 'Fold the corners to the center again.', p2p(A)]),
+  ];
+}
+function blintzBase() {
+  let s = E.turnOver(E.newPaper()).facets;
+  for (const [, fn] of blintzSteps()) s = fn(s).facets;
+  return s.map(f => ({ ...f, anim: undefined }));
+}
+const DEMOS = {
+  prelim: [
+    ['Valley fold the diagonal.', s => E.foldOp(s, { p: [0,0], d: [S,-S] }, 1, 'valley', 0)],
+    ['Fold the triangle in half.', s => E.foldOp(s, { p: [0,0], d: [S,S] }, -1, 'valley', 0)],
+    ['Squash the top flap into a square.', s => E.squashOp(s, { p: [0,0], d: [S,S] }, 1, 2), 1400],
+    ['Turn the model over.', s => E.turnOver(s), 900],
+    ['Squash the other flap. That\u2019s a preliminary base.', s => E.squashOp(s, { p: [0,0], d: [S,-S] }, 1, 2), 1400],
+  ],
+  waterbomb: [
+    ['Fold in half.', s => E.foldOp(s, { p: [0,0], d: [1,0] }, 1, 'valley', 0)],
+    ['Fold in half again.', s => E.foldOp(s, { p: [0,0], d: [0,1] }, 1, 'valley', 0)],
+    ['Squash the top flap into a triangle.', s => E.squashOp(s, { p: [0,0], d: [0,1] }, -1, 2), 1400],
+    ['Turn the model over.', s => E.turnOver(s), 900],
+    ['Squash the other flap. That\u2019s a waterbomb base.', s => E.squashOp(s, { p: [0,0], d: [0,1] }, 1, 2), 1400],
+  ],
+  bird: [
+    ['Fold a preliminary base.', s => prelimBase(), 300],
+    ['Petal fold: lift the bottom corner while the sides fold in.', s => E.petalOp(s, [0, -0.7]), 2200],
+    ['Turn the model over.', s => E.turnOver(s), 900],
+    ['Petal fold this side too. That’s a bird base, the start of the crane.', s => E.petalOp(s, [0, -0.7]), 2200],
+  ],
+  elephant: elephantSteps(),
+  crane: modelSteps(CRANE),
+  flower: [
+    ...blintzSteps(),
+    ['Bend the four petals open.', { bends: [
+      [{ p: [0.5, 0], d: [0, 1] }, [0.3, 0]], [{ p: [0, 0.5], d: [-1, 0] }, [0, 0.3]],
+      [{ p: [-0.5, 0], d: [0, -1] }, [-0.3, 0]], [{ p: [0, -0.5], d: [1, 0] }, [0, -0.3]]], angle: 105, dir: 1 }],
+    ['Curl the tips outward. Use Look around to see it in 3D.', { bends: [
+      [{ p: [0.16, 0], d: [0, 1] }, [0.06, 0]], [{ p: [0, 0.16], d: [-1, 0] }, [0, 0.06]],
+      [{ p: [-0.16, 0], d: [0, -1] }, [-0.06, 0]], [{ p: [0, -0.16], d: [1, 0] }, [0, -0.06]]], angle: 70, dir: -1 }],
+  ],
+  reverse: [
+    ['Valley fold the diagonal.', s => E.foldOp(s, { p: [0,0], d: [S,-S] }, 1, 'valley', 0)],
+    ['Inside reverse fold the right tip.', s => E.foldOp(s, { p: [0.35,0], d: [0,1] }, -1, 'inside', 0), 1100],
+    ['Outside reverse fold the top tip.', s => E.foldOp(s, { p: [0,0.3], d: [1,0] }, 1, 'outside', 0), 1100],
+  ],
+};
+async function demo(name) {
+  if (busy) return;
+  if (viewMode) setView(false);
+  history.push(snapshot()); future = [];
+  await applyResult(name === 'reverse' ? E.newPaper() : E.turnOver(E.newPaper()).facets, false);
+  resetView();
+  if (name === 'elephant') setColors(ELE_COLORS);
+  if (name === 'crane') setColors(CRANE_COLORS);
+  for (const [msg, step, dur] of DEMOS[name]) {
+    $('#hint').innerHTML = `<span>${msg}</span>`;
+    await new Promise(r => setTimeout(r, 600));
+    if (typeof step === 'function') {
+      const r = step(facets);
+      if (r.error) { toast(r.error); break; }
+      history.push(snapshot());
+      await applyResult(r.facets, !!r.facets[0].anim, dur || 800);
+    } else {
+      const saved = $('#layers').value; $('#layers').value = step.layers || '1';
+      for (const [L, tap, wing] of step.bends) {
+        const sg = Math.sign(E.side(L, tap));
+        await addBend(L, sg, seedAt(tap), step.angle, step.dir, true, wing ? wingSet(facets, L, wing) : undefined);
+      }
+      $('#layers').value = saved;
+    }
+  }
+  if (name === 'elephant' || name === 'crane') { await new Promise(r => setTimeout(r, 500)); await setStanding(true); }
+  if (name === 'flower') {
+    const from = camera.position.clone(), to = new THREE.Vector3(0, -3.3, 3.9), t0 = performance.now();
+    await new Promise(res => { const f = (t) => { const u = ease(Math.min(1, (t - t0) / 1600)); camera.position.lerpVectors(from, to, u); controls.target.set(0, 0, 0); camera.lookAt(0, 0, 0); if (u < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+  }
+  await new Promise(r => setTimeout(r, 1800));
+  hint();
+}
+
+// ---------- stand the model up ----------
+let standing = false;
+function modelMinY() { return Math.min(...facets.flatMap(E.fold).map(p => p[1])); }
+function animateTo(toStand, camTo, tgtTo, ms, floorY) {
+  const camFrom = camera.position.clone(), tgtFrom = controls.target.clone(), t0 = performance.now();
+  const r0 = matMesh.rotation.x, r1 = toStand ? -Math.PI / 2 : 0;
+  const y0 = matMesh.position.y, y1 = toStand ? floorY : 0, z0 = matMesh.position.z, z1 = toStand ? 0 : -0.004;
+  busy = true;
+  return new Promise(res => {
+    const f = (t) => {
+      const u = ease(Math.min(1, (t - t0) / ms));
+      matMesh.rotation.x = r0 + (r1 - r0) * u; matMesh.position.y = y0 + (y1 - y0) * u; matMesh.position.z = z0 + (z1 - z0) * u;
+      camera.position.lerpVectors(camFrom, camTo, u); controls.target.lerpVectors(tgtFrom, tgtTo, u);
+      camera.lookAt(controls.target);
+      if (u < 1) requestAnimationFrame(f); else { busy = false; res(); }
+    };
+    requestAnimationFrame(f);
+  });
+}
+function standLabel(on) { const sb = document.querySelector('[data-act=stand]'); if (sb) sb.firstChild.textContent = on ? 'Lay it flat' : 'Stand it up'; }
+async function setStanding(on) {
+  if (on === standing || busy) return;
+  standing = on; standLabel(on);
+  if (on) {
+    if (!viewMode) setView(true);
+    const b = E.bbox(facets.flatMap(E.fold)), cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
+    const D = Math.max(2.6, 2.3 * Math.max(b[2] - b[0], b[3] - b[1]) / Math.min(1, camera.aspect));
+    await animateTo(true, new THREE.Vector3(cx + 0.4 * D, cy + 0.3 * D, D), new THREE.Vector3(cx, cy, 0), 1300, b[1] - 0.002);
+  } else {
+    await animateTo(false, HOME.clone(), new THREE.Vector3(0, 0, 0), 900);
+  }
+}
+
+// ---------- tutorials ----------
+const S2 = Math.SQRT1_2;
+function hullOf(pts) {
+  const p = pts.map(q => [Math.round(q[0]*1e4)/1e4, Math.round(q[1]*1e4)/1e4]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0]);
+  const lo = [], up = [];
+  for (const q of p) { while (lo.length > 1 && cr(lo[lo.length-2], lo[lo.length-1], q) <= 1e-9) lo.pop(); lo.push(q); }
+  for (const q of p.slice().reverse()) { while (up.length > 1 && cr(up[up.length-2], up[up.length-1], q) <= 1e-9) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function sig(fs) {
+  const h = hullOf(fs.flatMap(E.fold));
+  return { area: Math.abs(E.area(h)), verts: h.length, level: Math.max(...E.levels(fs).lv) };
+}
+const sameSig = (a, b) => Math.abs(a.area - b.area) < 0.02 && a.verts === b.verts && a.level === b.level;
+const sameBox = (a, b) => { const x = E.bbox(a.flatMap(E.fold)), y = E.bbox(b.flatMap(E.fold)); return x.every((v, i) => Math.abs(v - y[i]) < 1e-3); };
+
+function modelTutorial(title, list, colors, done) {
+  return {
+    title, colors, done, model: true,
+    start: () => E.turnOver(E.newPaper()).facets,
+    steps: list.map(st => {
+      if (st.rotate != null) return { text: st.text, apply: fs => eApply(st, fs).facets, on: 'auto' };
+      if (st.turn) return { text: st.text, apply: fs => eApply(st, fs).facets, on: 'turn' };
+      if (st.tool === 'petal') return { text: st.text + ' Tap the glowing corner.', setup: () => setTool('petal'), guide: { pts: [st.tap] }, apply: fs => eApply(st, fs).facets, on: 'fold' };
+      const L = eLine(st);
+      const where = st.bend ? 'the part to bend' : st.tool === 'squash' ? 'the flap' : 'the glowing dot';
+      return {
+        text: st.text + ' Drag along the glowing line, then tap ' + where + '.',
+        setup: () => { setTool(st.bend ? 'bend' : st.tool); setMethod('line'); if (st.tool !== 'sink') $('#layers').value = String(st.n || (st.tool === 'squash' ? 2 : 0)); },
+        guide: (fs) => ({ line: crossing(fs, L), tap: st.tap }),
+        exact: L,
+        bend: st.bend ? [L, st.tap] : undefined, bendAngle: st.angle, bendDir: st.dir, wing: st.wing,
+        apply: fs => eApply(st, fs).facets,
+        on: st.bend ? 'bend' : 'fold',
+      };
+    }),
+  };
+}
+const TUTORIALS = {
+  basics: {
+    title: 'The basics',
+    start: () => E.newPaper(),
+    steps: [
+      { text: 'Drag a line across the middle of the paper, from the left edge to the right edge. Then tap the top half to fold it down.',
+        setup: () => { setTool('valley'); setMethod('line'); },
+        guide: { line: [[-1, 0], [1, 0]], tap: [0, 0.5] },
+        apply: fs => E.foldOp(fs, { p: [0,0], d: [1,0] }, 1, 'valley', 0).facets, on: 'fold' },
+      { text: 'Changed your mind? Press Undo at the top to unfold it.', apply: () => E.newPaper(), on: 'undo', act: () => undo() },
+      { text: 'Now bring one corner onto another. I switched the crease to Point → point. Tap the glowing corner, then the corner opposite it.',
+        setup: () => { setTool('valley'); setMethod('p2p'); },
+        guide: { pts: [[1, 1], [-1, -1]] },
+        apply: fs => E.foldOp(fs, { p: [0,0], d: [S2,-S2] }, 1, 'valley', 0).facets, on: 'fold' },
+      { text: 'Press Turn over to flip the model and see the other side of the paper.', apply: fs => E.turnOver(fs).facets, on: 'turn' },
+      { text: 'Press Look around and drag to tilt the model. You can see the layers stacked up. Press Look around again to go back to folding.', apply: fs => fs, on: 'view-off' },
+    ],
+    done: 'You know the basics. Every fold works the same way: pick a type, place the crease, and tap what moves.',
+  },
+  squash: {
+    title: 'Squash folds',
+    start: () => E.turnOver(E.newPaper()).facets,
+    steps: [
+      { text: 'Fold the paper corner to corner. Tap the glowing corner, then the opposite one.',
+        setup: () => { setTool('valley'); setMethod('p2p'); },
+        guide: { pts: [[1, 1], [-1, -1]] },
+        apply: fs => E.foldOp(fs, { p: [0,0], d: [S2,-S2] }, 1, 'valley', 0).facets, on: 'fold' },
+      { text: 'Fold the triangle in half. Tap the glowing sharp corner, then the other sharp corner.',
+        setup: () => { setTool('valley'); setMethod('p2p'); },
+        guide: { pts: [[1, -1], [-1, 1]] },
+        apply: fs => E.foldOp(fs, { p: [0,0], d: [-S2,-S2] }, 1, 'valley', 0).facets, on: 'fold' },
+      { text: 'Now the squash. I picked the Squash tool. Drag along the glowing line, which is the flap\u2019s hinge. Then tap the flap.',
+        setup: () => { setTool('squash'); },
+        guide: { line: [[0, 0], [-1, -1]], tap: [-0.62, 0.22] },
+        apply: fs => E.squashOp(fs, { p: [0,0], d: [S2,S2] }, 1, 2).facets, on: 'fold' },
+      { text: 'The flap opened into a square. Press Turn over to get to the other flap.', apply: fs => E.turnOver(fs).facets, on: 'turn' },
+      { text: 'Squash this flap the same way. Drag along the glowing hinge, then tap the flap.',
+        setup: () => { setTool('squash'); },
+        guide: { line: [[0, 0], [1, -1]], tap: [0.62, 0.22] },
+        apply: fs => E.squashOp(fs, { p: [0,0], d: [S2,-S2] }, 1, 2).facets, on: 'fold' },
+    ],
+    done: 'That square is a preliminary base. It\u2019s the starting point for the crane, the frog, and the lily.',
+  },
+  petal: {
+    title: 'Petal folds',
+    start: () => prelimBase().facets,
+    steps: [
+      { text: 'This is a preliminary base. I picked the Petal tool. Tap the glowing bottom corner to lift it.',
+        setup: () => setTool('petal'), guide: { pts: [[0, -0.707]] },
+        apply: fs => E.petalOp(fs, [0, -0.7]).facets, on: 'fold' },
+      { text: 'The sides folded in as the corner went up. Press Turn over.', apply: fs => E.turnOver(fs).facets, on: 'turn' },
+      { text: 'Petal fold this side too. Tap the glowing corner.',
+        setup: () => setTool('petal'), guide: { pts: [[0, -0.707]] },
+        apply: fs => E.petalOp(fs, [0, -0.7]).facets, on: 'fold' },
+    ],
+    done: 'That\u2019s a bird base, the shape a crane is folded from.',
+  },
+  elephant: modelTutorial('Elephant', ELEPHANT, ELE_COLORS, 'Your elephant is finished. Stand it up to see it in 3D, with the trunk curling toward you.'),
+  crane: modelTutorial('Crane', CRANE, CRANE_COLORS, 'Your crane is finished. Stand it up to see it with its wings spread.'),
+  flower: {
+    title: 'Bend into 3D',
+    start: () => blintzBase(),
+    steps: [
+      { text: 'Folds so far lie flat. Bends can stop at any angle. I picked Bend. Drag along the glowing edge, then tap the triangle next to it.',
+        setup: () => { setTool('bend'); },
+        guide: { line: [[0.5, -0.5], [0.5, 0.5]], tap: [0.3, 0] },
+        bend: [{ p: [0.5, -0.5], d: [0, 1] }, [0.3, 0]],
+        apply: fs => E.bendSplit(fs, { p: [0.5, -0.5], d: [0, 1] }, 1, 1, f => inPoly([0.3, 0], E.fold(f))).facets, on: 'bend' },
+      { text: 'Your bend is listed in the panel on the left. Drag its slider to open the petal wider.', apply: fs => fs, on: 'bend-angle' },
+      { text: 'Bend the top petal the same way: drag along the glowing edge, then tap its triangle.',
+        setup: () => { setTool('bend'); },
+        guide: { line: [[0.5, 0.5], [-0.5, 0.5]], tap: [0, 0.3] },
+        bend: [{ p: [0.5, 0.5], d: [-1, 0] }, [0, 0.3]],
+        apply: fs => fs, on: 'bend' },
+      { text: 'Press Look around and drag to see your petals standing up. Press it again when you\u2019re done.', apply: fs => fs, on: 'view-off' },
+    ],
+    done: 'Bends work on any flap. Open Sheet and pick Show me: 3D flower to see a finished one.',
+  },
+};
+
+let tut = null; // { def, i, canon[] }
+const card = $('#tut');
+const guideGroup = new THREE.Group(); scene.add(guideGroup);
+function clearGuide() { while (guideGroup.children.length) { const c = guideGroup.children.pop(); c.geometry.dispose(); } }
+function drawGuide(g) {
+  clearGuide(); if (!g) return;
+  const z = topZ() + 0.002;
+  const ring = (p, col) => { const m = new THREE.Mesh(new THREE.RingGeometry(0.045, 0.075, 32), ovMat(col, 0.95)); m.position.set(p[0], p[1], z); m.renderOrder = 12; m.userData.pulse = true; guideGroup.add(m); };
+  if (g.pts) g.pts.forEach((p, i) => ring(p, i === 0 ? 0xffd447 : 0xffffff));
+  if (g.line) {
+    const [a, b] = g.line, d = norm([b[0]-a[0], b[1]-a[1]]), w = 0.016, nx = -d[1]*w, ny = d[0]*w;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([a[0]+nx,a[1]+ny,0, b[0]+nx,b[1]+ny,0, b[0]-nx,b[1]-ny,0, a[0]+nx,a[1]+ny,0, b[0]-nx,b[1]-ny,0, a[0]-nx,a[1]-ny,0], 3));
+    const l = new THREE.Mesh(geo, ovMat(0xffd447, 0.9)); l.position.z = z; l.renderOrder = 12; guideGroup.add(l);
+    ring(g.line[0], 0xffd447); ring(g.line[1], 0xffd447);
+  }
+  if (g.tap) { const m = new THREE.Mesh(new THREE.CircleGeometry(0.05, 28), ovMat(0xffffff, 0.75)); m.position.set(g.tap[0], g.tap[1], z); m.renderOrder = 12; m.userData.pulse = true; guideGroup.add(m); }
+}
+function renderCard(extra) {
+  if (!tut) { card.hidden = true; return; }
+  card.hidden = false;
+  const { def, i } = tut, n = def.steps.length;
+  if (i >= n) {
+    card.innerHTML = `<p class="tut-title">${def.title}</p><p class="tut-text">${def.done}</p>
+      <div class="tut-actions"><button class="primary" data-t="close">Start folding</button>${def === TUTORIALS.basics ? '<button data-t="next-tut">Try squash folds</button>' : ''}${def.model ? '<button data-t="look">Stand it up</button>' : ''}</div>`;
+    return;
+  }
+  card.innerHTML = `<p class="tut-title">${def.title}<span>Step ${i + 1} of ${n}</span></p>
+    <div class="tut-bar"><i style="width:${(i / n) * 100}%"></i></div>
+    <p class="tut-text">${def.steps[i].text}</p>
+    ${extra ? `<p class="tut-note">${extra}</p>` : ''}
+    <div class="tut-actions">${def.steps[i].on === 'auto' ? '' : '<button class="primary" data-t="show">Show me</button>'}<button data-t="close">Exit tutorial</button></div>`;
+}
+card.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const a = b.dataset.t;
+  if (a === 'close') endTutorial();
+  if (a === 'next-tut') startTutorial('squash');
+  if (a === 'show') showMe();
+  if (a === 'look') { endTutorial(); setStanding(true); }
+});
+function enterStep() {
+  cancel();
+  const st = tut.def.steps[tut.i];
+  if (!st) { clearGuide(); renderCard(); return; }
+  if (st.setup) st.setup();
+  const g = typeof st.guide === 'function' ? st.guide(tut.canon[tut.i]) : st.guide;
+  extraSnaps = g ? [...(g.pts || []), ...(g.line || [])] : [];
+  drawGuide(g);
+  renderCard();
+  if (st.on === 'auto') setTimeout(() => { if (tut && tut.def.steps[tut.i] === st) commit({ facets: st.apply(facets) }, 800, 'auto'); }, 700);
+}
+async function startTutorial(name) {
+  if (busy) return;
+  if (viewMode) setView(false);
+  const def = TUTORIALS[name];
+  const canon = [def.start()];
+  def.steps.forEach((st, k) => canon.push(st.apply(canon[k])));
+  tut = { def, i: 0, canon };
+  if (def.colors) setColors(def.colors);
+  history.push(snapshot()); future = [];
+  await applyResult(canon[0], false);
+  resetView();
+  enterStep();
+}
+function endTutorial() { tut = null; extraSnaps = []; clearGuide(); renderCard(); }
+function advance() {
+  const target = tut.canon[tut.i + 1];
+  if (target && !sameBox(facets, target)) applyResult(target, false, 0, bends);
+  tut.i++;
+  card.classList.add('tut-pass'); setTimeout(() => card.classList.remove('tut-pass'), 500);
+  enterStep();
+}
+notify = (evt) => {
+  if (!tut || tut.i >= tut.def.steps.length) return;
+  const st = tut.def.steps[tut.i];
+  if (st.on !== evt) return;
+  if (evt === 'fold') {
+    if (sameSig(sig(facets), sig(tut.canon[tut.i + 1]))) advance();
+    else renderCard('That\u2019s a different fold. Press Undo and try again, or press Show me.');
+  } else if (evt === 'undo') {
+    if (facets.length === 1) advance();
+  } else advance();
+};
+async function showMe() {
+  if (busy || !tut) return;
+  const st = tut.def.steps[tut.i];
+  cancel();
+  if (st.on === 'undo') { if (history.length) undo(); else advance(); return; }
+  if (st.on === 'bend') { const [L, tap] = st.bend; await addBend(L, Math.sign(E.side(L, tap)), seedAt(tap), st.bendAngle || 90, st.bendDir || 1, true, st.wing ? wingSet(facets, L, st.wing) : undefined); return; }
+  if (st.on === 'bend-angle') {
+    const b = bends[bends.length - 1]; if (!b) { advance(); return; }
+    const a0 = b.angle, t0 = performance.now(); busy = true;
+    await new Promise(res => { const f = (t) => { const u = Math.min(1, (t - t0) / 700); b.angle = a0 + (140 - a0) * ease(u); poseAll(null, 1); if (u < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+    busy = false; renderBends(); notify('bend-angle'); return;
+  }
+  if (st.on === 'view-off') {
+    setView(true);
+    const from = camera.position.clone(), t0 = performance.now();
+    await new Promise(res => { const f = (t) => { const u = Math.min(1, (t - t0) / 1400); camera.position.set(from.x, from.y - Math.sin(u * Math.PI) * 3.2, from.z - Math.sin(u * Math.PI) * 1.2); camera.lookAt(0, 0, 0); if (u < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+    setView(false); return;
+  }
+  const prev = tut.canon[tut.i];
+  if (!sameBox(facets, prev) || facets.length !== prev.length) await applyResult(prev, false);
+  const res = st.on === 'turn' ? E.turnOver(facets) : { facets: st.apply(facets) };
+  const r = st.on === 'fold' ? { facets: st.apply(facets) } : res;
+  await commit(r, tool === 'squash' ? 1300 : 800, st.on);
+}
+$('#learn').addEventListener('click', (e) => { e.stopPropagation(); const m = $('#learnmenu'); const o = m.classList.toggle('open'); $('#learn').setAttribute('aria-expanded', o); });
+document.addEventListener('click', () => { $('#learnmenu').classList.remove('open'); $('#learn').setAttribute('aria-expanded', false); });
+$('#learnmenu').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) startTutorial(b.dataset.tut); });
+(function animateGuide() {
+  const s = 1 + 0.18 * Math.sin(performance.now() / 260);
+  guideGroup.children.forEach(c => { if (c.userData.pulse) c.scale.set(s, s, 1); c.position.z = topZ() + 0.002; });
+  requestAnimationFrame(animateGuide);
+})();
+// first visit: offer the basics
+let seen = false; try { seen = localStorage.getItem('fold-tour-seen') === '1'; localStorage.setItem('fold-tour-seen', '1'); } catch (e) {}
+if (!seen) {
+  card.hidden = false;
+  card.innerHTML = `<p class="tut-title">New to Fold?</p><p class="tut-text">A five-step tour shows you how to crease, fold, undo, and look around. It takes about a minute.</p>
+    <div class="tut-actions"><button class="primary" data-t2="go">Take the tour</button><button data-t2="no">No thanks</button></div>`;
+  card.addEventListener('click', function once(e) {
+    const b = e.target.closest('button[data-t2]'); if (!b) return;
+    card.removeEventListener('click', once);
+    if (b.dataset.t2 === 'go') startTutorial('basics'); else card.hidden = true;
+  });
+}
+
+// ---------- loop ----------
+buildMeshes(); updateButtons(); hint();
+(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+window.__fold = { E, get bends() { return bends; }, ws: (L, w) => wingSet(facets, L, w), st: (n) => startTutorial(n), show: (fs, nb) => applyResult(fs, false, 0, nb), get facets() { return facets; }, inPoly };
+})();
+</script></body></html>
