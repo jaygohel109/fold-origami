@@ -1,6 +1,6 @@
-# Fold: an origami workbench
+# Kamigami: an origami workbench
 
-Fold a virtual square of paper in 3D: valley, mountain, inside and outside reverse folds, open sinks, squash folds, petal folds, pull-outs, and bends to any angle, with layered paper thickness.
+Kamigami a virtual square of paper in 3D: valley, mountain, inside and outside reverse folds, open sinks, squash folds, petal folds, pull-outs, and bends to any angle, with layered paper thickness.
 
 ## Run it
 Open `index.html` in a browser. It works offline because three.js is included in `lib/`.
