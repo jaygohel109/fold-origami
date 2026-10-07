@@ -123,6 +123,9 @@ input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-rad
   .toast{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
 }
 .moreset{display:none}
+.credit{position:fixed;right:12px;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--panel);color:var(--muted);border-radius:999px;padding:4px 11px;box-shadow:var(--shadow);font-size:12px;z-index:2;pointer-events:none;opacity:.9}
+.credit b{color:var(--ink);font-weight:500}
+@media (max-width: 760px){ .credit{right:8px;bottom:calc(12px + env(safe-area-inset-bottom,0px));font-size:11px;padding:3px 9px} }
 @media (prefers-reduced-motion: reduce){ .toast{transition:none} }
 </style>
 </head>
@@ -234,6 +237,7 @@ input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-rad
 <section class="tut" id="tut" hidden aria-live="polite"></section>
 <div class="hint" id="hint" aria-live="polite"></div>
 <div class="toast" id="toast" role="alert"></div>
+<div class="credit">Designed by <b>Jay</b></div>
 <script src="lib/three.min.js"></script>
 <script src="lib/OrbitControls.js"></script>
 <script src="src/engine.js"></script>
