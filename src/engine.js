@@ -26,9 +26,10 @@ const Engine = (() => {
   const dirOf = (ang) => [Math.cos(ang), Math.sin(ang)];
   const clone = (fs) => fs.map(f => ({ id: f.id, poly: f.poly.map(p => p.slice()), T: f.T.slice(), layer: f.layer }));
 
-  function newPaper() {
+  // w, h: half width and half height of the sheet (1, 1 = the default square)
+  function newPaper(w = 1, h = 1) {
     nextId = 1;
-    return [{ id: nextId++, poly: [[-1,-1],[1,-1],[1,1],[-1,1]], T: [1,0,0,1,0,0], layer: 0 }];
+    return [{ id: nextId++, poly: [[-w,-h],[w,-h],[w,h],[-w,h]], T: [1,0,0,1,0,0], layer: 0 }];
   }
 
   // Split a facet by a line given in folded coordinates.

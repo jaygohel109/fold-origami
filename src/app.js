@@ -25,20 +25,20 @@ const under = new THREE.DirectionalLight(0xffffff, 0.35); under.position.set(-2,
 // cutting mat
 let matMesh;
 (function mat() {
-  const c = document.createElement('canvas'); c.width = c.height = 1024;
+  const c = document.createElement('canvas'); c.width = c.height = 2048; // 16 units, 8 grid cells per unit
   const g = c.getContext('2d');
-  g.fillStyle = '#23473e'; g.fillRect(0, 0, 1024, 1024);
-  for (let i = 0; i <= 64; i++) {
+  g.fillStyle = '#23473e'; g.fillRect(0, 0, 2048, 2048);
+  for (let i = 0; i <= 128; i++) {
     const x = i * 16;
     g.strokeStyle = i % 8 === 0 ? 'rgba(220,240,230,.28)' : 'rgba(220,240,230,.10)';
     g.lineWidth = i % 8 === 0 ? 2 : 1;
-    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 1024); g.stroke();
-    g.beginPath(); g.moveTo(0, x); g.lineTo(1024, x); g.stroke();
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 2048); g.stroke();
+    g.beginPath(); g.moveTo(0, x); g.lineTo(2048, x); g.stroke();
   }
   g.strokeStyle = 'rgba(220,240,230,.22)'; g.lineWidth = 1.5;
-  g.beginPath(); g.moveTo(0, 0); g.lineTo(1024, 1024); g.moveTo(1024, 0); g.lineTo(0, 1024); g.stroke();
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(2048, 2048); g.moveTo(2048, 0); g.lineTo(0, 2048); g.stroke();
   const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
   m.position.z = -0.004; scene.add(m); matMesh = m;
 })();
 
@@ -49,21 +49,31 @@ const paperGroup = new THREE.Group(); scene.add(paperGroup);
 const overlay = new THREE.Group(); scene.add(overlay);
 
 // ---------- state ----------
+// half width, half height of each sheet shape; the long side always spans 2 units
+const SHAPES = { square: [1, 1], a4: [Math.SQRT1_2, 1], letter: [8.5 / 11, 1], a4wide: [1, Math.SQRT1_2] };
+let shape = 'square';
+const blankSheet = () => E.newPaper(...SHAPES[shape]);
 let facets = E.newPaper();
 let history = [], future = [];
 let bends = [], bendSeq = 1;
 let tool = 'valley', method = 'line', phase = 'idle', viewMode = false, busy = false;
 let start = null, end = null, crease = null, pA = null;
 let thickness = 0.0009 * 7;
-let meshes = [], levelsNow = [], snapPts = [], extraSnaps = [];
+let meshes = [], levelsNow = [], snapPts = [], extraSnaps = [], edgeSegs = [], edgeA = null;
 
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.fov = 32;
+  // center the paper in the space the panels leave free: the tool dock at the bottom on
+  // phones and short screens, the tool panel on the left everywhere else
+  const docked = matchMedia('(max-width: 760px), (max-height: 520px)').matches, row = document.querySelector('#tools .toolrow');
+  const top = docked ? 60 : 0, bottom = docked && row ? row.offsetHeight + 76 : 0, left = docked ? 0 : 280;
+  const freeW = Math.max(160, w - left), freeH = Math.max(120, h - top - bottom);
+  camera.setViewOffset(w, h, -left / 2, (bottom - top) / 2, w, h);
   camera.updateProjectionMatrix();
-  const fit = 3.3, dist = (fit / 2) / Math.tan(16 * Math.PI / 180) / Math.min(1, camera.aspect) + 0.3;
+  const fit = docked ? 2.7 : 3.3, dist = (fit / 2) / Math.tan(16 * Math.PI / 180) * Math.max(h / freeH, h / freeW, 1) + 0.3;
   const fresh = camera.position.distanceTo(HOME) < 1e-6;
   HOME.z = dist;
   if (fresh || !resizedOnce) camera.position.copy(HOME);
@@ -82,7 +92,7 @@ function rotAbout(v, L, th, zA) {
 }
 const ease = (u) => u < 0.5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3) / 2;
 
-let spacing = thickness;
+let spacing = thickness, lift = 0;
 function zOf(level) { return 0.0015 + level * spacing; }
 function updateSpacing() { const m = Math.max(1, ...levelsNow); spacing = Math.min(thickness, 0.045 / m); }
 
@@ -107,17 +117,17 @@ function buildMeshes() {
     meshes.push({ f, geo, egeo, front, back, edges: el, segs });
   });
   poseAll(null, 1);
-  snapPts = [];
+  snapPts = []; edgeSegs = [];
   for (const f of facets) for (const p of E.fold(f)) snapPts.push(p);
-  edges.forEach((segs, i) => { for (const s of segs) { const a = E.ap(facets[i].T, s[0]), b = E.ap(facets[i].T, s[1]); snapPts.push([(a[0]+b[0])/2, (a[1]+b[1])/2]); } });
+  edges.forEach((segs, i) => { for (const s of segs) { const a = E.ap(facets[i].T, s[0]), b = E.ap(facets[i].T, s[1]); snapPts.push([(a[0]+b[0])/2, (a[1]+b[1])/2]); edgeSegs.push({ a, b, i }); } });
   snapPts.push([0, 0]);
 }
 
 // bends that move this facet, innermost first
-function bendsFor(f) {
+function bendsFor(f, list = bends, T = f.T) {
   const out = [];
-  for (const b of bends) if (b.set.includes(f.id)) {
-    const c = E.centroid(E.fold(f));
+  for (const b of list) if (b.set.includes(f.id)) {
+    const c = E.centroid(f.poly.map(v => E.ap(T, v)));
     const sg = Math.sign(E.side(b.line, c)) || 1;
     out.push({ line: b.line, th: b.dir * sg * b.angle * Math.PI / 180, n: b.set.length, zA: b.zA });
   }
@@ -140,8 +150,10 @@ function poseAll(anim, u) {
     if (anim) {
       const a = f.anim, z0 = zOf(anim.old.get(a.origin) ?? levelsNow[i]), z1 = zOf(levelsNow[i]);
       const e = ease(u), k = a.steps.length;
+      const pre = anim.bends ? bendsFor(f, anim.bends, a.T0) : [];
       map = (p) => {
         const q = E.ap(a.T0, p); let v = [q[0], q[1], z0];
+        for (const b of pre) v = rotAbout(v, b.line, b.th, b.zA ?? z0);
         const K = a.stages || k;
         a.steps.forEach((s, j) => { const pr = Math.min(1, Math.max(0, e*K - (s.stage ?? j))); if (pr > 0) v = rotAbout(v, s.line, s.theta * pr, z0); });
         v[2] += (z1 - z0) * e; return v;
@@ -163,11 +175,17 @@ function poseAll(anim, u) {
     m.egeo.setDrawRange(0, m.segs.length * 2);
     m.egeo.attributes.position.needsUpdate = true; m.egeo.computeBoundingSphere();
   });
+  // a flap bent down below the paper props the whole model up off the mat
+  let lo = Infinity;
+  for (const m of meshes) { const a = m.geo.attributes.position.array; for (let k = 2; k < a.length; k += 3) lo = Math.min(lo, a[k]); }
+  lift = standing || lo === Infinity ? 0 : Math.max(0, 0.0015 - lo);
+  paperGroup.position.z = lift;
 }
 
 function applyResult(next, animate, dur, nb) {
   if (standing) { standing = false; matMesh.rotation.x = 0; matMesh.position.set(0, 0, -0.004); standLabel(false); }
   if (next && next.f) { nb = next.b; next = next.f; }
+  const prevBends = bends;
   bends = nb ? cloneBends(nb) : [];
   const prevLv = E.levels(facets).lv, old = new Map();
   facets.forEach((f, i) => old.set(f.id, prevLv[i]));
@@ -180,7 +198,7 @@ function applyResult(next, animate, dur, nb) {
     const t0 = performance.now();
     const tick = (t) => {
       const u = Math.min(1, (t - t0) / dur);
-      poseAll({ old }, u);
+      poseAll({ old, bends: nb ? prevBends : null }, u);
       if (u < 1) requestAnimationFrame(tick); else { poseAll(null, 1); busy = false; res(); }
     };
     requestAnimationFrame(tick);
@@ -190,11 +208,23 @@ const plain = (fs) => fs.map(f => ({ id: f.id, poly: f.poly, T: f.T, layer: f.la
 const cloneBends = (bs) => bs.map(b => ({ ...b, line: { p: b.line.p.slice(), d: b.line.d.slice() }, set: b.set.slice() }));
 const snapshot = () => ({ f: plain(facets), b: cloneBends(bends) });
 let notify = () => {};
-function commit(result, dur = 750, evt = 'fold') {
+function commit(result, dur = 750, evt = 'fold', carried) {
   if (result.error) { toast(result.error); return Promise.resolve(false); }
-  if (bends.length) toast('The bends were flattened so the paper could fold. Undo brings them back.', true);
+  if (bends.length && !carried) toast('The bends were flattened so the paper could fold. Undo brings them back.', true);
   history.push(snapshot()); future = [];
-  return applyResult(result.facets, true, dur).then(() => { notify(evt); return true; });
+  return applyResult(result.facets, true, dur, carried).then(() => { notify(evt); return true; });
+}
+// Turning over, rotating and centering move the paper without folding it, so the bends ride along.
+// Turning over also turns each bend the other way up.
+function carryBends(M, flip) {
+  const tv = (v) => [M[0]*v[0] + M[1]*v[1], M[2]*v[0] + M[3]*v[1]];
+  return bends.map(b => ({ ...b, set: b.set.slice(), dir: flip ? -b.dir : b.dir, line: { p: E.ap(M, b.line.p), d: tv(b.line.d) } }));
+}
+function turnOver() { if (busy) return; cancel(); return commit(E.turnOver(facets), 900, 'turn', carryBends([-1, 0, 0, 1, 0, 0], true)); }
+function rotate45() { if (busy) return; cancel(); const c = Math.SQRT1_2; return commit(E.rotate(facets, Math.PI / 4), 0, 'fold', carryBends([c, -c, c, c, 0, 0])); }
+function recenter() {
+  const b = E.bbox(facets.flatMap(E.fold));
+  return commit(E.recenter(facets), 0, 'fold', carryBends([1, 0, 0, 1, -(b[0] + b[2]) / 2, -(b[1] + b[3]) / 2]));
 }
 
 // ---------- overlay ----------
@@ -206,7 +236,14 @@ const creaseLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDash
 creaseLine.renderOrder = 11; overlay.add(creaseLine);
 const segLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true, opacity: .7 }));
 segLine.renderOrder = 11; overlay.add(segLine);
-function topZ() { return zOf(Math.max(0, ...levelsNow)) + 0.01; }
+const edgeMark = new THREE.Mesh(new THREE.BufferGeometry(), ovMat(0xffd447, 0.95)); edgeMark.renderOrder = 11; overlay.add(edgeMark);
+function setStrip(mesh, a, b) {
+  const d = norm([b[0]-a[0], b[1]-a[1]]), w = 0.014, nx = -d[1]*w, ny = d[0]*w, z = topZ();
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([a[0]+nx,a[1]+ny,z, b[0]+nx,b[1]+ny,z, b[0]-nx,b[1]-ny,z, a[0]+nx,a[1]+ny,z, b[0]-nx,b[1]-ny,z, a[0]-nx,a[1]-ny,z], 3));
+  mesh.geometry.dispose(); mesh.geometry = g; mesh.visible = true;
+}
+function topZ() { return zOf(Math.max(0, ...levelsNow)) + 0.01 + lift; }
 function modelBox() { const b = E.bbox(facets.flatMap(E.fold)); return [b[0] - 0.25, b[1] - 0.25, b[2] + 0.25, b[3] + 0.25]; }
 function clipBox(L, sgn) {
   const b = modelBox();
@@ -240,7 +277,7 @@ function setSide(L, sgn) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
   sideMesh.geometry.dispose(); sideMesh.geometry = g; sideMesh.visible = true;
 }
-function clearOverlay() { creaseLine.visible = segLine.visible = sideMesh.visible = markA.visible = false; }
+function clearOverlay() { creaseLine.visible = segLine.visible = sideMesh.visible = markA.visible = edgeMark.visible = false; }
 clearOverlay(); snapDot.visible = false;
 function creaseColor() { creaseLine.material.color.set(tool === 'mountain' || tool === 'outside' ? 0x8fd3ff : 0xffd447); creaseLine.material.dashSize = tool === 'mountain' ? 0.09 : 0.06; }
 
@@ -254,11 +291,13 @@ function worldAt(ev) {
   const hit = new THREE.Vector3();
   return ray.ray.intersectPlane(plane, hit) ? [hit.x, hit.y] : null;
 }
-function snap(p, ev) {
+function pickTol(ev) {
   const dist = camera.position.distanceTo(controls.target);
   const perPx = 2 * dist * Math.tan(camera.fov * Math.PI / 360) / stage.clientHeight;
-  const tol = perPx * (ev && ev.pointerType === 'touch' ? 26 : 14);
-  let best = null, bd = tol;
+  return perPx * (ev && ev.pointerType === 'touch' ? 26 : 14);
+}
+function snap(p, ev) {
+  let best = null, bd = pickTol(ev);
   for (const q of snapPts.concat(extraSnaps)) { const d = Math.hypot(q[0]-p[0], q[1]-p[1]); if (d < bd) { bd = d; best = q; } }
   return best ? { p: best.slice(), snapped: true } : { p, snapped: false };
 }
@@ -266,6 +305,39 @@ function showSnap(s) {
   if (s && s.snapped) { snapDot.position.set(s.p[0], s.p[1], topZ()); snapDot.visible = true; } else snapDot.visible = false;
 }
 const norm = (v) => { const l = Math.hypot(v[0], v[1]); return [v[0]/l, v[1]/l]; };
+
+// ---------- edge → line creases ----------
+function nearestOnSeg(p, a, b) {
+  const ex = b[0]-a[0], ey = b[1]-a[1], t = Math.max(0, Math.min(1, ((p[0]-a[0])*ex + (p[1]-a[1])*ey) / (ex*ex + ey*ey || 1)));
+  return [a[0] + ex*t, a[1] + ey*t];
+}
+// the paper edge or crease under p, if any
+function edgeAt(p, ev) {
+  let best = null, bd = pickTol(ev);
+  for (const e of edgeSegs) { const q = nearestOnSeg(p, e.a, e.b), d = Math.hypot(q[0]-p[0], q[1]-p[1]); if (d < bd) { bd = d; best = { ...e, at: q }; } }
+  return best;
+}
+// Crease that lays edge A onto line T: the bisector of the two lines, turning the part of A
+// that was tapped onto the part of T that was picked. Parallel lines get the line halfway between.
+function edgeCrease(A, T) {
+  const de = norm([A.b[0]-A.a[0], A.b[1]-A.a[1]]), dt = norm([T.b[0]-T.a[0], T.b[1]-T.a[1]]);
+  const cr = de[0]*dt[1] - de[1]*dt[0];
+  if (Math.abs(cr) < 1e-6) {
+    const k = (A.at[0]-T.a[0])*dt[0] + (A.at[1]-T.a[1])*dt[1], q = [T.a[0] + dt[0]*k, T.a[1] + dt[1]*k];
+    if (Math.hypot(q[0]-A.at[0], q[1]-A.at[1]) < 1e-4) return null;
+    return { p: [(A.at[0]+q[0])/2, (A.at[1]+q[1])/2], d: de };
+  }
+  const t = ((T.a[0]-A.a[0])*dt[1] - (T.a[1]-A.a[1])*dt[0]) / cr, X = [A.a[0] + de[0]*t, A.a[1] + de[1]*t];
+  const far = (g) => Math.hypot(g.a[0]-X[0], g.a[1]-X[1]) > Math.hypot(g.b[0]-X[0], g.b[1]-X[1]) ? g.a : g.b;
+  const away = (q, g) => Math.hypot(q[0]-X[0], q[1]-X[1]) > 1e-4 ? norm([q[0]-X[0], q[1]-X[1]]) : norm([far(g)[0]-X[0], far(g)[1]-X[1]]);
+  const u = away(A.at, A), v = away([(T.a[0]+T.b[0])/2, (T.a[1]+T.b[1])/2], T);
+  return { p: X, d: norm([u[0]+v[0], u[1]+v[1]]) };
+}
+function previewEdge(T) {
+  const L = T && edgeCrease(edgeA, T);
+  if (!L) { creaseLine.visible = sideMesh.visible = false; return; }
+  creaseColor(); setLine(creaseLine, lineAcross(L)); setSide(L, Math.sign(E.side(L, edgeA.tap)) || 1);
+}
 
 const el = renderer.domElement;
 let downInfo = null;
@@ -284,6 +356,15 @@ el.addEventListener('pointerdown', (ev) => {
       phase = 'idle'; clearOverlay(); hint();
       run(L, sg, pA); return;
     }
+  }
+  if (method === 'e2l' && tool !== 'squash' && tool !== 'bend' && tool !== 'pull') {
+    if (phase === 'idle') {
+      const e = edgeAt(w, ev); if (!e) { toast('Tap right on an edge of the paper or a crease.', true); return; }
+      const c = E.centroid(E.fold(facets[e.i])), k = norm([c[0]-e.at[0], c[1]-e.at[1]]);
+      edgeA = { ...e, tap: [e.at[0] + k[0]*0.01, e.at[1] + k[1]*0.01] };
+      phase = 'e2lA'; setStrip(edgeMark, e.a, e.b); hint(); return;
+    }
+    if (phase === 'e2lA') { start = s.p; end = s.p; phase = 'e2lDrag'; el.setPointerCapture(ev.pointerId); return; }
   }
   if (phase === 'idle') {
     start = s.p; end = s.p; phase = 'drawing';
@@ -311,10 +392,27 @@ el.addEventListener('pointermove', (ev) => {
       creaseColor(); setLine(creaseLine, lineAcross(L)); setLine(segLine, [pA, s.p]);
       setSide(L, Math.sign(E.side(L, pA)) || 1);
     }
+  } else if (phase === 'e2lA' || phase === 'e2lDrag') {
+    let T = null;
+    if (phase === 'e2lDrag' && Math.hypot(s.p[0]-start[0], s.p[1]-start[1]) > 0.02) { end = s.p; showSnap(s); T = { a: start, b: end }; setLine(segLine, [start, end]); }
+    else { T = edgeAt(w, ev); showSnap(T ? null : s); }
+    previewEdge(T);
   } else showSnap(s);
 });
 el.addEventListener('pointerup', (ev) => {
   if (viewMode || busy) return;
+  if (phase === 'e2lDrag') {
+    const dragged = end && Math.hypot(end[0]-start[0], end[1]-start[1]) > 0.03;
+    const T = dragged ? { a: start, b: end } : edgeAt(worldAt(ev) || start, ev);
+    const L = T && edgeCrease(edgeA, T);
+    if (!L) {
+      phase = 'e2lA'; segLine.visible = creaseLine.visible = sideMesh.visible = false;
+      toast(T ? 'That edge already lies on that line.' : 'Tap the edge or crease it should land on, or drag a line for it.', true); return;
+    }
+    const tap = edgeA.tap; edgeA = null;
+    phase = 'idle'; clearOverlay(); hint();
+    run(L, Math.sign(E.side(L, tap)) || 1, tap); return;
+  }
   if (phase === 'drawing') {
     if (end && Math.hypot(end[0]-start[0], end[1]-start[1]) > 0.03) {
       crease = { p: start.slice(), d: norm([end[0]-start[0], end[1]-start[1]]) };
@@ -348,7 +446,7 @@ function run(L, sg, tap) {
   const n = layerN();
   const flapTool = tool !== 'valley' && tool !== 'mountain';
   const seed = (n !== 0 || flapTool) && tap && E.side(L, tap) * sg > 0 ? seedAt(tap) : undefined;
-  if (tool === 'bend') return addBend(L, sg, seed, (st && st.bendAngle) || 90, (st && st.bendDir) || 1, true, st && st.wing && L === st.exact ? wingSet(facets, L, st.wing) : undefined);
+  if (tool === 'bend') return addBend(L, sg, seed, (st && st.bendAngle) || 90, (st && st.bendDir) || (n < 0 ? -1 : 1), true, st && st.wing && L === st.exact ? wingSet(facets, L, st.wing) : undefined);
   if (tool === 'pull') return commit(tap ? E.pullOp(facets, L, sg, tap) : { error: 'Tap the part of the hidden flap you want to pull out.' }, 1000);
   const r = tool === 'squash' ? E.squashOp(facets, L, sg, n || 2, seed) : E.foldOp(facets, L, sg, tool, n, seed);
   if (r.error && seed && /Nothing/.test(r.error)) r.error = 'Tap right on the part of the paper you want to fold.';
@@ -364,6 +462,10 @@ function addBend(L, sg, seed, angle = 90, dir = 1, animate = true, preset) {
   const mapSet = (set) => r.facets.filter(f => set.includes(f.id) || (f.origin != null && f.origin !== f.id && set.includes(f.origin))).map(f => f.id);
   const nb = cloneBends(bends).map(b => ({ ...b, set: mapSet(b.set) }));
   const S = new Set(r.set);
+  if (!preset && nb.some(b => b.set.length === S.size && b.set.every(id => S.has(id))
+    && Math.abs(b.line.d[0]*L.d[1] - b.line.d[1]*L.d[0]) < 1e-6 && Math.abs(E.side(b.line, L.p)) < 1e-6)) {
+    toast('That part is already bent along this line. Change it with its slider in the Bends list.'); return Promise.resolve(false);
+  }
   for (const b of nb) {
     const inter = b.set.filter(id => S.has(id)).length;
     if (inter && inter !== b.set.length && inter !== S.size) { toast('That bend would cross another bend in a way paper can’t move. Remove the other bend first.'); return Promise.resolve(false); }
@@ -415,6 +517,7 @@ document.addEventListener('click', (e) => {
 const HINTS = {
   line: 'Drag across the paper to draw a crease.',
   p2p: 'Tap the point you want to move.',
+  e2l: 'Tap the edge or crease you want to move.',
   squash: 'Drag along the hinge of the flap you want to squash.',
 };
 function hint() {
@@ -423,6 +526,7 @@ function hint() {
   else if (phase === 'drawing') t = tool === 'squash' ? 'Let go when the line sits on the flap\u2019s hinge.' : 'Let go to place the crease. Points snap to corners and edges.';
   else if (phase === 'pickSide') t = tool === 'squash' ? 'Tap the flap to squash it open.' : tool === 'mountain' ? 'Tap the side that should fold behind.' : tool === 'bend' ? 'Tap the part that should lift up.' : tool === 'pull' ? 'Tap the hidden flap you want to pull out.' : tool === 'valley' ? 'Tap the side that should fold over.' : 'Tap the tip that should reverse.';
   else if (phase === 'p2pA') t = 'Tap where that point should land.';
+  else if (phase === 'e2lA' || phase === 'e2lDrag') t = 'Now tap the edge it should land on, or drag a line for it. Lines snap to corners and middles.';
   else t = tool === 'squash' ? HINTS.squash : tool === 'petal' ? 'Tap the open corner of the top flap. It lifts while both sides fold in.' : tool === 'bend' ? 'Drag a line where the paper should bend, then tap the part that lifts.' : tool === 'pull' ? 'Drag along the hinge of a hidden flap, then tap the flap to pull it out.' : HINTS[method];
   $('#hint').innerHTML = `<span>${t}</span>` + (phase !== 'idle' ? '<button class="cancel" type="button">Cancel</button>' : '');
   const c = $('#hint .cancel'); if (c) c.addEventListener('click', cancel);
@@ -449,14 +553,21 @@ $('#moreset').addEventListener('click', () => { const tl = $('#tools'); tl.class
 $('#thick').addEventListener('input', (e) => { thickness = 0.0009 * +e.target.value; updateSpacing(); poseAll(null, 1); });
 $('#cf').addEventListener('input', (e) => matFront.color.set(e.target.value));
 $('#cb').addEventListener('input', (e) => matBack.color.set(e.target.value));
+function setShape(s) {
+  if (!SHAPES[s] || busy) { $('#shape').value = shape; return; }
+  shape = s; $('#shape').value = s; cancel();
+  if (tut) endTutorial();
+  history.push(snapshot()); future = []; applyResult(blankSheet(), false);
+}
+$('#shape').addEventListener('change', (e) => setShape(e.target.value));
 
 function updateButtons() { $('#undo').disabled = !history.length; $('#redo').disabled = !future.length; }
 function undo() { if (busy || !history.length) return; cancel(); future.push(snapshot()); applyResult(history.pop(), false); notify('undo'); }
 function redo() { if (busy || !future.length) return; cancel(); history.push(snapshot()); applyResult(future.pop(), false); }
 $('#undo').addEventListener('click', undo);
 $('#redo').addEventListener('click', redo);
-$('#turn').addEventListener('click', () => { if (!busy) { cancel(); commit(E.turnOver(facets), 900, 'turn'); } });
-$('#rot').addEventListener('click', () => { if (!busy) { cancel(); commit(E.rotate(facets, Math.PI / 4), 0); } });
+$('#turn').addEventListener('click', turnOver);
+$('#rot').addEventListener('click', rotate45);
 function setView(on) {
   if (!on && standing) { standing = false; standLabel(false); animateTo(false, HOME.clone(), new THREE.Vector3(0, 0, 0), 900); }
   viewMode = on; cancel(); controls.enableRotate = on; controls.enablePan = on;
@@ -473,8 +584,8 @@ document.addEventListener('click', () => { menu.classList.remove('open'); $('#mo
 menu.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || busy) return;
   const a = b.dataset.act; cancel();
-  if (a === 'new') { history.push(snapshot()); future = []; applyResult(E.newPaper(), false); }
-  if (a === 'center') commit(E.recenter(facets), 0);
+  if (a === 'new') { history.push(snapshot()); future = []; applyResult(blankSheet(), false); }
+  if (a === 'center') recenter();
   if (a === 'resetview') resetView();
   if (a === 'stand') setStanding(!standing);
   if (a && a.startsWith('demo-')) { endTutorial(); demo(a.slice(5)); }
@@ -489,8 +600,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key === ' ' && !e.target.matches('button')) { e.preventDefault(); setView(!viewMode); }
   const map = { v: 'valley', m: 'mountain', i: 'inside', o: 'outside', s: 'sink', q: 'squash', p: 'petal', b: 'bend', u: 'pull' };
   if (!e.ctrlKey && !e.metaKey && map[e.key.toLowerCase()]) setTool(map[e.key.toLowerCase()]);
-  if (e.key.toLowerCase() === 't' && !busy) commit(E.turnOver(facets), 900, 'turn');
-  if (e.key.toLowerCase() === 'r' && !busy) commit(E.rotate(facets, Math.PI / 4), 0);
+  if (e.key.toLowerCase() === 't') turnOver();
+  if (e.key.toLowerCase() === 'r') rotate45();
 });
 
 // ---------- demos ----------
@@ -738,7 +849,7 @@ function animateTo(toStand, camTo, tgtTo, ms, floorY) {
 function standLabel(on) { const sb = document.querySelector('[data-act=stand]'); if (sb) sb.firstChild.textContent = on ? 'Lay it flat' : 'Stand it up'; }
 async function setStanding(on) {
   if (on === standing || busy) return;
-  standing = on; standLabel(on);
+  standing = on; standLabel(on); poseAll(null, 1);
   if (on) {
     if (!viewMode) setView(true);
     const b = E.bbox(facets.flatMap(E.fold)), cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
@@ -988,7 +1099,7 @@ $('#learnmenu').addEventListener('click', (e) => { const b = e.target.closest('b
 let seen = false; try { seen = localStorage.getItem('fold-tour-seen') === '1'; localStorage.setItem('fold-tour-seen', '1'); } catch (e) {}
 if (!seen) {
   card.hidden = false;
-  card.innerHTML = `<p class="tut-title">New to Fold?</p><p class="tut-text">A five-step tour shows you how to crease, fold, undo, and look around. It takes about a minute.</p>
+  card.innerHTML = `${card.dataset.logo ? `<img class="tut-logo" src="${card.dataset.logo}" alt="kamigami, online paper fold workbench">` : ''}<p class="tut-title">New to Kamigami?</p><p class="tut-text">A five-step tour shows you how to crease, fold, undo, and look around. It takes about a minute.</p>
     <div class="tut-actions"><button class="primary" data-t2="go">Take the tour</button><button data-t2="no">No thanks</button></div>`;
   card.addEventListener('click', function once(e) {
     const b = e.target.closest('button[data-t2]'); if (!b) return;
@@ -996,6 +1107,131 @@ if (!seen) {
     if (b.dataset.t2 === 'go') startTutorial('basics'); else card.hidden = true;
   });
 }
+
+
+// ---------- fold guide (AI chat) ----------
+// Switched off for now: no API key yet and no content guard rails. Set to true to bring it back
+// (the server function also needs FOLD_GUIDE_ENABLED=true).
+const GUIDE_ENABLED = false;
+const GUIDE_URL = '/api/fold-guide';
+if (!GUIDE_ENABLED) $('#guidebtn').parentElement.style.display = 'none';
+const guide = $('#guide'), glog = $('#guidelog'), gform = $('#guideform'), gtext = $('#guidetext'), greplies = $('#guidereplies');
+let gHistory = [], gImage = null, gBusy = false;
+try { gHistory = JSON.parse(localStorage.getItem('fold-guide-chat') || '[]'); } catch (e) { gHistory = []; }
+const gSave = () => { try { localStorage.setItem('fold-guide-chat', JSON.stringify(gHistory.slice(-30).map(m => ({ role: m.role, text: m.text, actions: m.actions })))); } catch (e) {} };
+const escHtml = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (s) => escHtml(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+const TOOL_NAMES = { valley: 'Valley', mountain: 'Mountain', inside: 'Inside reverse', outside: 'Outside reverse', sink: 'Sink', squash: 'Squash', petal: 'Petal', bend: 'Bend', pull: 'Pull out' };
+function actionLabel(a) {
+  if (a.label) return String(a.label).slice(0, 40);
+  if (a.type === 'tool') return 'Select ' + (TOOL_NAMES[a.value] || a.value);
+  if (a.type === 'tutorial') return 'Start the tutorial';
+  if (a.type === 'demo') return 'Show me';
+  return String(a.value);
+}
+function runAction(a) {
+  const v = String(a.value);
+  if (a.type === 'tool' && TOOL_NAMES[v]) setTool(v);
+  else if (a.type === 'method' && (v === 'line' || v === 'p2p' || v === 'e2l')) setMethod(v);
+  else if (a.type === 'layers' && ['0','1','2','3','4','6','-1','-2'].includes(v)) $('#layers').value = v;
+  else if (a.type === 'tutorial' && TUTORIALS[v]) { closeGuide(); startTutorial(v); }
+  else if (a.type === 'demo' && DEMOS[v]) { closeGuide(); endTutorial(); demo(v); }
+  else if (a.type === 'command') {
+    if (v === 'undo') undo();
+    else if (v === 'turn') turnOver();
+    else if (v === 'rotate') rotate45();
+    else if (v === 'look') setView(!viewMode);
+    else if (v === 'stand') setStanding(!standing);
+    else if (v === 'new' && !busy) { history.push(snapshot()); future = []; applyResult(blankSheet(), false); }
+  }
+  else if (a.type === 'shape' && SHAPES[v]) setShape(v);
+  if (window.matchMedia('(max-width: 760px)').matches && (a.type === 'tool' || a.type === 'command')) closeGuide();
+}
+function renderMsg(m) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + (m.role === 'user' ? 'user' : m.role === 'error' ? 'err' : 'bot');
+  d.innerHTML = (m.img ? `<img src="${m.img}" alt="Diagram you shared">` : '') + fmt(m.text || '');
+  if (m.actions && m.actions.length) {
+    const acts = document.createElement('div'); acts.className = 'acts';
+    for (const a of m.actions) { const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = actionLabel(a); btn.addEventListener('click', () => runAction(a)); acts.appendChild(btn); }
+    d.appendChild(acts);
+  }
+  glog.appendChild(d); glog.scrollTop = glog.scrollHeight;
+}
+function setReplies(list) {
+  greplies.innerHTML = '';
+  for (const r of (list || []).slice(0, 3)) { const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = r; btn.addEventListener('click', () => sendGuide(r)); greplies.appendChild(btn); }
+}
+function guideIntro() {
+  glog.innerHTML = '';
+  if (!gHistory.length) {
+    renderMsg({ role: 'assistant', text: 'Hi! Tell me what you\u2019d like to fold, like a boat, a frog or a heart, or share a picture of a diagram you found. I\u2019ll take you through it one step at a time and tell you which tool to use.' });
+    setReplies(['Fold a paper boat', 'Fold a crane', 'What can I make here?']);
+  } else gHistory.forEach(renderMsg);
+}
+function openGuide() { if (!GUIDE_ENABLED) return; guide.hidden = false; $('#guidebtn').setAttribute('aria-expanded', true); if (!glog.children.length) guideIntro(); setTimeout(() => gtext.focus(), 50); }
+function closeGuide() { guide.hidden = true; $('#guidebtn').setAttribute('aria-expanded', false); }
+$('#guidebtn').addEventListener('click', () => guide.hidden ? openGuide() : closeGuide());
+$('#guideclose').addEventListener('click', closeGuide);
+gtext.addEventListener('input', () => { gtext.style.height = 'auto'; gtext.style.height = Math.min(120, gtext.scrollHeight) + 'px'; });
+gtext.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); gform.requestSubmit(); } });
+gform.addEventListener('submit', (e) => { e.preventDefault(); sendGuide(gtext.value); });
+$('#guidefile').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+    const s = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    const url = c.toDataURL('image/jpeg', 0.85);
+    gImage = { url, data: url.split(',')[1] };
+    $('#guidethumb').innerHTML = `<img src="${url}" alt=""><span>Diagram attached</span><button type="button" id="guiderm">Remove</button>`;
+    $('#guiderm').addEventListener('click', () => { gImage = null; $('#guidethumb').innerHTML = ''; });
+  } catch (err) { renderMsg({ role: 'error', text: 'That image couldn\u2019t be read. Try a PNG or JPEG.' }); }
+});
+function appContext() {
+  return { tool, method, layers: $('#layers').value, shape, folds: history.length, bends: bends.length, viewMode, standing,
+    tutorial: tut ? tut.def.title + ' step ' + (tut.i + 1) : null };
+}
+const G_ERRORS = {
+  not_configured: 'The fold guide isn\u2019t switched on for this site yet. (Site owner: add ANTHROPIC_API_KEY in Netlify \u2192 Project configuration \u2192 Environment variables, then redeploy.)',
+  rate_limited: 'That\u2019s a lot of questions in a short time. Wait a few minutes and try again.',
+  bad_key: 'The fold guide\u2019s API key was rejected. (Site owner: check ANTHROPIC_API_KEY in Netlify.)',
+};
+async function sendGuide(text) {
+  text = String(text || '').trim();
+  if (!GUIDE_ENABLED || gBusy || (!text && !gImage)) return;
+  const user = { role: 'user', text: text || 'Here\u2019s the diagram I want to fold.', img: gImage && gImage.url };
+  const imgData = gImage && gImage.data;
+  gImage = null; $('#guidethumb').innerHTML = ''; gtext.value = ''; gtext.style.height = 'auto'; setReplies([]);
+  renderMsg(user); gHistory.push({ role: 'user', text: user.text });
+  gBusy = true; $('#guidesend').disabled = true;
+  const typing = document.createElement('div'); typing.className = 'typing'; typing.textContent = 'Thinking about the folds\u2026'; glog.appendChild(typing); glog.scrollTop = glog.scrollHeight;
+  // send text history; the newest message carries the image if one was attached
+  const messages = gHistory.filter(m => m.role === 'user' || m.role === 'assistant').slice(-14).map(m => ({ role: m.role, content: m.text }));
+  if (imgData) { gLastImage = imgData; }
+  if (gLastImage) {
+    const last = messages[messages.length - 1];
+    last.content = [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: gLastImage } }, { type: 'text', text: last.content }];
+  }
+  try {
+    const r = await fetch(GUIDE_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages, context: appContext() }) });
+    let data = null; try { data = await r.json(); } catch (e) {}
+    typing.remove();
+    if (!r.ok || !data || data.error) {
+      const msg = (data && G_ERRORS[data.error]) || (r.status === 404 ? G_ERRORS.not_configured : 'The fold guide couldn\u2019t answer just now. Try again in a moment.');
+      renderMsg({ role: 'error', text: msg }); gHistory.pop(); gSave();
+    } else {
+      const bot = { role: 'assistant', text: data.message || '', actions: (data.actions || []).filter(a => a && a.type && a.value != null) };
+      renderMsg(bot); gHistory.push(bot); gSave(); setReplies(data.replies);
+    }
+  } catch (e) {
+    typing.remove(); renderMsg({ role: 'error', text: 'You seem to be offline, so the fold guide can\u2019t reach the server.' }); gHistory.pop();
+  }
+  gBusy = false; $('#guidesend').disabled = false;
+}
+let gLastImage = null;
 
 // ---------- loop ----------
 buildMeshes(); updateButtons(); hint();

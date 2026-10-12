@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Fold — origami workbench</title>
+<title>Kamigami — online paper fold workbench</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
@@ -34,13 +36,17 @@ button,select,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-.bar{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:8px;align-items:center;pointer-events:none;z-index:3}
+.bar{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:8px;align-items:center;pointer-events:none;z-index:3;min-width:0}
 .bar > *{pointer-events:auto}
-.brand{background:var(--panel);border-radius:10px;padding:7px 14px;box-shadow:var(--shadow);display:flex;align-items:baseline;gap:10px}
-.brand b{font-size:17px;letter-spacing:.01em}
-.brand span{color:var(--muted);font-size:13px}
+/* the logo artwork sits on its own slate background in both themes */
+.brand{background:#333d46;border-radius:10px;padding:6px 14px 6px 10px;box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;white-space:nowrap;flex:none;min-height:39px}
+.brand img{display:block;width:auto}
+.brand-word{height:24px}
+.brand .brand-logo{height:30px;display:none}
+.brand span{color:#c9cfd3;font-size:13px}
+.tut-logo{display:block;width:200px;max-width:70%;height:auto;margin:2px auto 12px;border-radius:10px}
 .spacer{flex:1}
-.group{display:flex;background:var(--panel);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+.group{display:flex;background:var(--panel);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;flex:none}
 .group button{background:none;border:0;padding:8px 12px;display:flex;gap:6px;align-items:center;font-size:14px;white-space:nowrap}
 .group button + button{border-left:1px solid var(--line)}
 .group button:hover{background:var(--panel-2)}
@@ -64,10 +70,15 @@ button{cursor:pointer}
 .seg{display:flex;background:var(--panel-2);border-radius:8px;padding:2px}
 .seg button{border:0;background:none;padding:4px 9px;border-radius:6px;font-size:13px}
 .seg button[aria-pressed="true"]{background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.field.stack{flex-wrap:wrap}
+.field.stack .seg{width:100%;gap:2px}
+.field.stack .seg button{flex:1 1 auto;padding:4px 6px;font-size:12.5px;white-space:nowrap}
 select{background:var(--panel-2);border:0;border-radius:6px;padding:4px 6px;font-size:13px}
 input[type=range]{width:110px;accent-color:var(--accent)}
 input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-radius:6px;padding:0;background:none}
 .colors{display:flex;gap:6px;align-items:center}
+.field > select,.field > input[type=range]{flex:0 0 112px;width:112px;min-width:0}
+.field label{min-width:0}
 
 .hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--panel);color:var(--ink);border-radius:999px;padding:9px 18px;box-shadow:var(--shadow);font-size:14px;z-index:3;max-width:calc(100% - 24px);text-align:center;display:flex;gap:10px;align-items:center}
 .hint .cancel{border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:3px 12px;font-size:13px}
@@ -102,30 +113,80 @@ input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-rad
 .tut-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .tut-actions button{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 12px;font-size:13.5px}
 .tut-actions button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-@media (max-width: 760px){
-  .tut{left:8px;right:8px;width:auto;top:calc(60px + env(safe-area-inset-top,0px));padding:10px 12px}
+.guide{position:fixed;right:12px;top:calc(70px + env(safe-area-inset-top,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));width:360px;background:var(--panel);border-radius:14px;box-shadow:var(--shadow);z-index:6;display:flex;flex-direction:column;overflow:hidden}
+.guide[hidden]{display:none}
+.guide-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.guide-head b{display:block;font-size:15.5px}
+.guide-head span{display:block;font-size:13px;color:var(--muted)}
+.guide-head button{border:0;background:none;padding:4px;border-radius:6px;display:flex}
+.guide-head button:hover{background:var(--panel-2)}
+.guide-log{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:88%;font-size:14.5px;line-height:1.5;padding:9px 12px;border-radius:12px;white-space:normal;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:4px}
+.msg.bot{align-self:flex-start;background:var(--panel-2);border-bottom-left-radius:4px}
+.msg.err{align-self:flex-start;background:none;color:var(--warn);padding:0 2px;font-size:13.5px}
+.msg img{display:block;max-width:180px;max-height:180px;border-radius:8px;margin-bottom:6px}
+.msg .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.msg .acts button{border:1px solid var(--accent);color:var(--accent);background:var(--panel);border-radius:999px;padding:4px 11px;font-size:13px}
+.msg .acts button:hover{background:var(--accent);color:var(--accent-ink)}
+.typing{align-self:flex-start;color:var(--muted);font-size:13.5px;padding:0 2px}
+.guide-replies{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 8px}
+.guide-replies:empty{display:none}
+.guide-replies button{border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:5px 12px;font-size:13px}
+.guide-replies button:hover{border-color:var(--accent)}
+.guide-input{display:flex;align-items:flex-end;gap:6px;padding:10px;border-top:1px solid var(--line)}
+.guide-attach{display:flex;padding:8px;border-radius:8px;cursor:pointer;color:var(--muted)}
+.guide-attach:hover{background:var(--panel-2);color:var(--ink)}
+.guide-field{flex:1;background:var(--panel-2);border-radius:10px;padding:6px 10px;display:flex;flex-direction:column;gap:6px}
+.guide-field textarea{border:0;background:none;resize:none;font:inherit;font-size:14.5px;color:var(--ink);outline:none;max-height:120px}
+#guidethumb:empty{display:none}
+#guidethumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+#guidethumb img{width:40px;height:40px;object-fit:cover;border-radius:6px}
+#guidethumb button{border:0;background:none;color:var(--accent);font-size:12.5px;padding:0}
+#guidesend{border:0;background:var(--accent);color:var(--accent-ink);border-radius:10px;padding:9px;display:flex}
+#guidesend:disabled{opacity:.4}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.moreset{display:none}
+/* top bar: drop the tagline, then the button labels, as the screen narrows */
+@media (max-width: 1180px){ .brand span{display:none} }
+@media (max-width: 1000px){ .lbl{display:none} .group button{padding:8px 10px} }
+/* laptops with short screens: three tools per row so the settings stay in view */
+@media (min-width: 761px) and (min-height: 521px) and (max-height: 860px){
+  .toolrow{grid-template-columns:repeat(3,1fr);gap:2px}
+  .tool{padding:6px 2px 5px;gap:2px}
+  .tool svg{width:26px;height:26px}
+  .tool strong{font-size:12px}
+  .tool-desc{min-height:0;padding-top:6px}
+}
+/* phones, and any screen too short for the side panel: tools dock at the bottom */
+@media (max-width: 760px), (max-height: 520px){
+  .guide{left:8px;right:8px;width:auto;top:calc(60px + env(safe-area-inset-top,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+  .tut{left:8px;right:8px;width:auto;max-width:560px;margin:0 auto;top:calc(60px + env(safe-area-inset-top,0px));padding:10px 12px}
   .tut-text{font-size:13.5px}
   .brand span{display:none}
   .lbl{display:none}
   .group button{padding:8px 10px}
-  .tools{top:auto;left:8px;right:8px;width:auto;bottom:calc(70px + env(safe-area-inset-bottom,0px));max-height:none;display:flex;flex-wrap:wrap;gap:4px;padding:6px}
-  .tools .toolrow{display:flex;gap:2px;overflow-x:auto;width:100%}
+  .tools{top:auto;left:8px;right:8px;width:auto;bottom:calc(64px + env(safe-area-inset-bottom,0px));max-height:calc(100vh - 136px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto;padding:6px}
+  .tools .toolrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:2px}
   .tool-desc{display:none}
-  .tool{width:auto;min-width:64px;padding:5px 6px;gap:0;flex:none}
-  .tool svg{width:26px;height:26px}
-  .tool small{display:none}
-  .tool strong{font-size:12px}
+  .tool{min-width:0;padding:5px 2px;gap:1px}
+  .tool svg{width:24px;height:24px}
+  .tool strong{font-size:11.5px;line-height:1.15}
   .sep{display:none}
-  .settings{display:none;width:100%}
-  .tools.showsettings .settings{display:block}
-  .moreset{display:inline-flex !important}
+  .settings{display:none;padding-top:4px}
+  .tools.showsettings .settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));column-gap:12px;border-top:1px solid var(--line);margin-top:6px}
+  .settings #bends,.settings .field.stack{grid-column:1/-1}
+  .moreset{display:flex !important}
   .hint{font-size:12.5px;padding:7px 12px;width:max-content;bottom:calc(12px + env(safe-area-inset-bottom,0px));border-radius:12px}
-  .toast{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
+  .toast{bottom:auto;top:calc(64px + env(safe-area-inset-top,0px))}
 }
-.moreset{display:none}
-.credit{position:fixed;right:12px;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--panel);color:var(--muted);border-radius:999px;padding:4px 11px;box-shadow:var(--shadow);font-size:12px;z-index:2;pointer-events:none;opacity:.9}
-.credit b{color:var(--ink);font-weight:500}
-@media (max-width: 760px){ .credit{right:8px;bottom:calc(12px + env(safe-area-inset-bottom,0px));font-size:11px;padding:3px 9px} }
+@media (max-width: 400px){
+  .bar{left:8px;right:8px;gap:5px}
+  .brand{padding:4px 8px}
+  .brand .brand-word{display:none}
+  .brand .brand-logo{display:block}
+  .group button{padding:8px 7px}
+}
 @media (prefers-reduced-motion: reduce){ .toast{transition:none} }
 </style>
 </head>
@@ -133,7 +194,7 @@ input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-rad
 <div id="stage"></div>
 
 <div class="bar">
-  <div class="brand"><b>Kamigami</b><span>an origami workbench</span></div>
+  <div class="brand"><img class="brand-word" src="assets/wordmark.webp" alt="kamigami" width="342" height="76"><img class="brand-logo" src="assets/logo.webp" alt="kamigami" width="283" height="220"><span>online paper fold workbench</span></div>
   <div class="spacer"></div>
   <div class="group rel">
     <button id="learn" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6a2 2 0 012 2v12a2 2 0 00-2-2H4z"/><path d="M20 5h-6a2 2 0 00-2 2v12a2 2 0 012-2h6z"/></svg><span class="lbl">Tutorials</span></button>
@@ -148,6 +209,9 @@ input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-rad
     </div>
   </div>
   <div class="group">
+    <button id="guidebtn" aria-expanded="false" aria-controls="guide" title="Ask the fold guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg><span class="lbl">Guide</span></button>
+  </div>
+  <div class="group">
     <button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg><span class="lbl">Undo</span></button>
     <button id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg><span class="lbl">Redo</span></button>
   </div>
@@ -159,7 +223,7 @@ input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-rad
   <div class="group rel">
     <button id="more" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg><span class="lbl">Sheet</span></button>
     <div class="menu" id="menu" role="menu">
-      <button data-act="new" role="menuitem">New sheet<small>Start again with a flat square</small></button>
+      <button data-act="new" role="menuitem">New sheet<small>Start again with a flat sheet</small></button>
       <button data-act="center" role="menuitem">Center the model</button>
       <button data-act="resetview" role="menuitem">Reset the camera</button>
       <button data-act="stand" role="menuitem">Stand it up<small>See a side-view model upright, like a real figure</small></button>
@@ -211,10 +275,11 @@ input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-rad
   <p class="tool-desc" id="tooldesc">Fold toward you</p>
   <div class="sep"></div>
   <div class="settings">
-    <div class="field"><label>Crease by</label>
+    <div class="field stack"><label>Crease by</label>
       <div class="seg" role="group" aria-label="How to place the crease">
         <button data-method="line" aria-pressed="true" title="Drag a crease line">Line</button>
         <button data-method="p2p" aria-pressed="false" title="Bring one point onto another">Point → point</button>
+        <button data-method="e2l" aria-pressed="false" title="Lay one edge exactly onto another edge or line">Edge → line</button>
       </div></div>
     <div class="field"><label for="layers">Layers</label>
       <select id="layers">
@@ -227,6 +292,13 @@ input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-rad
         <option value="-1">Bottom 1</option>
         <option value="-2">Bottom 2</option>
       </select></div>
+    <div class="field"><label for="shape">Paper shape</label>
+      <select id="shape" title="Changing the shape starts a new sheet">
+        <option value="square">Square</option>
+        <option value="a4">A4 (tall)</option>
+        <option value="a4wide">A4 (wide)</option>
+        <option value="letter">US Letter</option>
+      </select></div>
     <div class="field"><label for="thick">Paper thickness</label><input type="range" id="thick" min="1" max="30" value="7"></div>
     <div class="field"><label>Paper colors</label>
       <div class="colors"><input type="color" id="cf" value="#c9483b" aria-label="Front color"><input type="color" id="cb" value="#fbfaf5" aria-label="Back color"></div></div>
@@ -234,10 +306,22 @@ input[type=color]{width:30px;height:24px;border:1px solid var(--line);border-rad
   </div>
 </div>
 
-<section class="tut" id="tut" hidden aria-live="polite"></section>
+<aside class="guide" id="guide" hidden aria-label="Fold guide">
+  <header class="guide-head">
+    <div><b>Fold guide</b><span>Tell me what you want to fold, or share a diagram.</span></div>
+    <button type="button" id="guideclose" aria-label="Close the guide"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </header>
+  <div class="guide-log" id="guidelog" aria-live="polite"></div>
+  <div class="guide-replies" id="guidereplies"></div>
+  <form class="guide-input" id="guideform">
+    <label class="guide-attach" title="Share a diagram image"><input type="file" id="guidefile" accept="image/*" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-7 8"/></svg><span class="sr">Share a diagram image</span></label>
+    <div class="guide-field"><div id="guidethumb"></div><textarea id="guidetext" rows="1" placeholder="I want to fold a paper boat"></textarea></div>
+    <button type="submit" id="guidesend" aria-label="Send"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+  </form>
+</aside>
+<section class="tut" id="tut" data-logo="assets/logo-text.webp" hidden aria-live="polite"></section>
 <div class="hint" id="hint" aria-live="polite"></div>
 <div class="toast" id="toast" role="alert"></div>
-<div class="credit">Designed by <b>Jay</b></div>
 <script src="lib/three.min.js"></script>
 <script src="lib/OrbitControls.js"></script>
 <script src="src/engine.js"></script>
